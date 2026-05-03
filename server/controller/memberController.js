@@ -1,0 +1,1217 @@
+import { prisma } from "../config/db.js";
+import argon2 from "argon2";
+
+import {
+  createMemberSchema,
+  updateMemberSchema,
+  loginSchema,
+  createSecurityTokenSchema,
+  changeSecurityTokenSchema,
+  verifySecurityCodeSchema,
+  billingFrequencySchema,
+  pricingActionSchema,
+  changeMemberAgentSchema,
+} from "../validator/memberValidator.js";
+import { customAlphabet } from "nanoid";
+import { sendEmail } from "../service/mail.js";
+import { createCustomer, createAccount } from "../service/paystack.js";
+import {
+  loginAlert,
+  accountCreation,
+  walletCreation,
+  resetCode,
+  resetSuccessful,
+} from "../service/templates.js";
+
+const memberSafeSelect = {
+  id: true,
+  uid: true,
+  fullname: true,
+  businessName: true,
+  center: true,
+  email: true,
+  phone: true,
+  type: true,
+  billingFrequency: true,
+  location: true,
+  category: true,
+  avatar: true,
+  status: true,
+  role: true,
+  agent: true,
+  createdAt: true,
+  updatedAt: true,
+  pricing: true,
+  paystackCustomerCode: true,
+  paystackCustomerId: true,
+};
+
+const looksLikeJwt = (value) => typeof value === "string" && value.split(".").length === 3;
+
+const resolveTargetMemberUid = (req) => {
+  if (looksLikeJwt(req.params?.id)) {
+    return req.userId || req.auth?.uid || null;
+  }
+
+  return req.params?.id || null;
+};
+
+const generateMemberUidSuffix = customAlphabet(
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+  10,
+);
+
+const random6Digit = () => {
+  return String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0");
+};
+
+const createMember = async (req, res) => {
+  try {
+    // Validate request body
+    const { error, value } = createMemberSchema.validate(req.body, {
+      abortEarly: false,
+    });
+    if (error) {
+      const errors = error.details.map((detail) => detail.message);
+      return res.status(400).json({
+        ok: false,
+        message: errors[0],
+        errors: errors,
+      });
+    }
+
+    console.log(value);
+
+    const existing = await prisma.member.findUnique({
+      where: { email: value.email },
+      select: { id: true },
+    });
+
+    if (existing)
+      return res
+        .status(409)
+        .json({ ok: false, message: "Email already exists" });
+
+    const hashedPassword = await argon2.hash(value.phone);
+
+    // Generate unique UID with collision detection
+    let genUid;
+    let attempts = 0;
+    const maxAttempts = 5;
+
+    while (!genUid && attempts < maxAttempts) {
+      const candidateUid = `URMSC-${generateMemberUidSuffix()}`;
+      const existingMemberWithUid = await prisma.member.findUnique({
+        where: { uid: candidateUid },
+        select: { id: true },
+      });
+
+      if (!existingMemberWithUid) {
+        genUid = candidateUid;
+      }
+      attempts++;
+    }
+
+    if (!genUid) {
+      return res.status(500).json({
+        ok: false,
+        message: "Failed to generate unique ID, please try again",
+      });
+    }
+
+    const member = await prisma.member.create({
+      data: {
+        fullname: value.fullname,
+        businessName: value.businessName,
+        center: value.center,
+        email: value.email,
+        phone: value.phone,
+        type: value.type || "BUSINESS",
+        password: hashedPassword,
+        location: value.location,
+        avatar: value.avatar,
+        agent: value.agent || "AGT-20260101-abscrs",
+        uid: genUid,
+        pricing: value.pricing || [],
+      },
+    });
+
+    if (!member) {
+      return res
+        .status(500)
+        .json({ ok: false, message: "Failed to create member" });
+    }
+
+    const createPaystackCustomer = await createCustomer(
+      member.email,
+      member.fullname.split(" ")[0],
+      member.fullname.split(" ")[1] || "",
+      member.phone || "",
+    );
+
+    if (!createPaystackCustomer?.status) {
+      console.error(
+        "Failed to create Paystack customer:",
+        createPaystackCustomer?.message || "Unknown error",
+      );
+    }
+
+    const paystackId = createPaystackCustomer?.data?.id;
+    const paystackCode = createPaystackCustomer?.data?.customer_code;
+
+    if (!paystackId || !paystackCode) {
+      console.error(
+        "Paystack returned incomplete customer payload:",
+        createPaystackCustomer?.data || null,
+      );
+    } else {
+      await prisma.member.update({
+        where: { uid: member.uid },
+        data: {
+          paystackCustomerId: String(paystackId),
+          paystackCustomerCode: paystackCode,
+        },
+      });
+    }
+
+    const existingWallet = await prisma.wallet.findFirst({
+      where: { memberId: member.uid },
+    });
+
+    if (!existingWallet) {
+      const walletAccount = await createAccount(paystackCode);
+
+      if (walletAccount?.status) {
+        const walletAccountNo = walletAccount?.data?.account_number;
+        const walletBank = walletAccount?.data?.bank;
+
+        if (walletAccountNo && walletBank?.name) {
+          await prisma.wallet.create({
+            data: {
+              memberId: member.uid,
+              accountNo: walletAccountNo,
+              bank: {
+                name: walletBank.name,
+                id: walletBank.id,
+                code: walletBank.code,
+              },
+              balance: 0.0,
+              status: walletAccount?.data?.active ? true : false,
+              accountName: walletAccount?.data?.account_name,
+              currency: walletAccount?.data?.currency,
+            },
+          });
+
+          void sendEmail(
+            member.email,
+            "Wallet Created Successfully",
+            await walletCreation(
+              member.fullname,
+              walletAccountNo,
+              walletBank.code,
+              walletAccount?.data?.account_name,
+              walletBank.name,
+            ),
+          ).catch((emailErr) => {
+            console.error(
+              "Member wallet creation email failed:",
+              emailErr?.message || emailErr,
+            );
+          });
+        }
+      }
+    }
+
+    void sendEmail(
+      member.email,
+      "Welcome to URMS Member Panel",
+      await accountCreation(member.fullname, member.email, member.phone),
+    )
+      .then((result) => {
+        if (!result?.ok) {
+          console.error(
+            "Welcome email failed:",
+            result?.error || "Unknown email error",
+          );
+        }
+      })
+      .catch((error) => {
+        console.error(
+          "Unexpected email send failure:",
+          error?.message || error,
+        );
+      });
+
+    let welcomeNotification = null;
+
+    try {
+      welcomeNotification = await prisma.notification.create({
+        data: {
+          userId: member.uid,
+          title: "Welcome to Arums",
+          description:
+            "Thanks for joining Arums. You can manage your profile and uploads anytime.",
+          type: "WELCOME",
+          date: new Date(),
+        },
+      });
+    } catch (notificationError) {
+      console.error(
+        "Failed to create welcome notification:",
+        notificationError.message || notificationError,
+      );
+      // Continue without notification - member was created successfully
+    }
+
+    const { password, ...memberWithoutPassword } = member;
+    return res.status(201).json({
+      ok: true,
+      message: "Member created successfully",
+      member: memberWithoutPassword,
+      welcomeNotification,
+    });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ ok: false, message: err?.message || "Server error" });
+  }
+};
+
+const getMembers = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(
+      Math.max(parseInt(req.query.limit, 10) || 20, 1),
+      100,
+    );
+    const skip = (page - 1) * limit;
+
+    const [members, total] = await Promise.all([
+      prisma.member.findMany({
+        where: {
+          center: id,
+        },
+        skip,
+        take: limit,
+        select: memberSafeSelect,
+      }),
+      prisma.member.count(),
+    ]);
+
+    return res.status(200).json({
+      ok: true,
+      data: members,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+const getMember = async (req, res) => {
+  try {
+    const member = await prisma.member.findUnique({
+      where: { uid: req.params.id },
+      select: memberSafeSelect,
+    });
+    if (!member) return res.status(404).json({ error: "Member not found" });
+    res
+      .status(200)
+      .json({
+        data: member,
+        ok: true,
+        message: "Member retrieved successfully",
+      });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+const updateMember = async (req, res) => {
+  try {
+    // Validate request body
+    const { error, value } = updateMemberSchema.validate(req.body, {
+      abortEarly: false,
+    });
+    if (error) {
+      const errors = error.details.map((detail) => detail.message);
+      return res.status(400).json({
+        ok: false,
+        message: errors[0],
+        errors: errors,
+      });
+    }
+
+    // Exclude pricing from update data if not provided
+    const updateData = { ...value };
+    if (!value.pricing) {
+      delete updateData.pricing;
+    }
+
+    const member = await prisma.member.update({
+      where: { uid: req.params.id },
+      data: updateData,
+    });
+
+    if (!member)
+      return res.status(404).json({ ok: false, message: "Member not found" });
+
+    try {
+      await prisma.notification.create({
+        data: {
+          userId: member.uid,
+          title: "Profile Updated",
+          description: "Your profile has been updated successfully.",
+          type: "UPDATE",
+          date: new Date(),
+        },
+      });
+    } catch (notificationError) {
+      console.error(
+        "Failed to create update notification:",
+        notificationError.message || notificationError,
+      );
+    }
+
+    const { password, ...memberWithoutPassword } = member;
+    res.status(200).json({
+      ok: true,
+      message: "Member updated successfully",
+      member: memberWithoutPassword,
+    });
+  } catch (err) {
+    console.error("Update member error:", err);
+    res
+      .status(500)
+      .json({ ok: false, message: err?.message || "Server error" });
+  }
+};
+
+const deleteMember = async (req, res) => {
+  try {
+    // Get member before deletion to use for notification
+    const memberToDelete = await prisma.member.findUnique({
+      where: { uid: req.params.id },
+      select: {
+        uid: true,
+        fullname: true,
+        email: true,
+      },
+    });
+    if (!memberToDelete)
+      return res.status(404).json({ error: "Member not found" });
+
+    // Create notification before deleting
+    try {
+      await prisma.notification.create({
+        data: {
+          userId: memberToDelete.uid,
+          title: "Account Deleted",
+          description: "Your account has been deleted.",
+          type: "UPDATE",
+          date: new Date(),
+        },
+      });
+    } catch (notificationError) {
+      console.error(
+        "Failed to create delete notification:",
+        notificationError.message || notificationError,
+      );
+    }
+
+    const member = await prisma.member.delete({
+      where: { uid: req.params.id },
+    });
+    res.status(204).json({ ok: true, message: "Member deleted successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+const login = async (req, res) => {
+  try {
+    // Validate request body
+    const { error, value } = loginSchema.validate(req.body, {
+      abortEarly: false,
+    });
+    if (error) {
+      const errors = error.details.map((detail) => detail.message);
+      return res.status(400).json({
+        ok: false,
+        message: errors[0],
+        errors,
+      });
+    }
+    const { email, password } = value;
+
+    // Find member by email
+    const member = await prisma.member.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        uid: true,
+        fullname: true,
+        businessName: true,
+        center: true,
+        email: true,
+        phone: true,
+        type: true,
+        billingFrequency: true,
+        password: true,
+        location: true,
+        avatar: true,
+        status: true,
+        role: true,
+        agent: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    if (!member) {
+      return res
+        .status(401)
+        .json({ ok: false, message: "Invalid email or password" });
+    }
+
+    // Compare password
+    const isPasswordValid = await argon2.verify(member.password, password);
+    if (!isPasswordValid) {
+      return res
+        .status(401)
+        .json({ ok: false, message: "Invalid email or password" });
+    }
+
+    const ip =
+      req.ip || req.headers["x-forwarded-for"] || req.connection.remoteAddress;
+    console.log(ip);
+
+    // Return member data
+    const { password: pwd, ...memberWithoutPassword } = member;
+
+    void sendEmail(
+      member.email,
+      "Login Alert from URMS",
+      await loginAlert(member.fullname, new Date().toLocaleString(), ip),
+    )
+      .then((result) => {
+        if (!result?.ok) {
+          console.error(
+            "Login alert email failed:",
+            result?.error || "Unknown email error",
+          );
+        }
+      })
+      .catch((error) => {
+        console.error(
+          "Unexpected email send failure:",
+          error?.message || error,
+        );
+      });
+
+    return res.status(200).json({
+      ok: true,
+      message: "Login successful",
+      member: memberWithoutPassword,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const forgotPassword = async (req, res) => {
+  try {
+    const targetUid = resolveTargetMemberUid(req);
+    if (!targetUid) {
+      return res
+        .status(400)
+        .json({ ok: false, message: "Member ID is required" });
+    }
+
+    const member = await prisma.member.findUnique({
+      where: { uid: targetUid },
+      select: {
+        uid: true,
+        email: true,
+        fullname: true,
+        businessName: true,
+      },
+    });
+
+    if (!member) {
+      return res.status(404).json({ ok: false, message: "Member not found" });
+    }
+
+    const code = random6Digit();
+    const hashedPassword = await argon2.hash(code);
+
+    await prisma.member.update({
+      where: { uid: targetUid },
+      data: { password: hashedPassword },
+    });
+
+    void sendEmail(
+      member.email,
+      "Password Reset",
+      await resetCode(member.fullname || member.businessName || "Member", code),
+    ).catch((emailErr) => {
+      console.error(
+        "Member password reset email failed:",
+        emailErr?.message || emailErr,
+      );
+    });
+
+    return res.status(200).json({
+      ok: true,
+      message:
+        "Password reset successfully. Check your email for temporary login",
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const targetUid = resolveTargetMemberUid(req);
+    if (!targetUid) {
+      return res
+        .status(400)
+        .json({ ok: false, message: "Member ID is required" });
+    }
+
+    const { error, value } = resetPasswordSchema.validate(req.body, {
+      abortEarly: false,
+    });
+    if (error) {
+      const errors = error.details.map((detail) => detail.message);
+      return res.status(400).json({
+        ok: false,
+        message: errors[0],
+        errors,
+      });
+    }
+
+    const existingMember = await prisma.member.findUnique({
+      where: { uid: targetUid },
+      select: { uid: true },
+    });
+
+    if (!existingMember) {
+      return res.status(404).json({ ok: false, message: "Member not found" });
+    }
+
+    const hashedPassword = await argon2.hash(value.currentPassword);
+    await prisma.member.update({
+      where: { uid: targetUid },
+      data: { password: hashedPassword },
+    });
+
+    try {
+      await prisma.notification.create({
+        data: {
+          userId: targetUid,
+          title: "Password Reset",
+          description:
+            "Your password has been reset to your current password successfully.",
+          type: "SUCCESS",
+          date: new Date(),
+        },
+      });
+    } catch (notificationError) {
+      console.error(
+        "Failed to create password reset notification:",
+        notificationError.message || notificationError,
+      );
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: "Password reset successfully",
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const createSecurityToken = async (req, res) => {
+  try {
+    const targetUid = resolveTargetMemberUid(req);
+    if (!targetUid) {
+      return res
+        .status(400)
+        .json({ ok: false, message: "Member ID is required" });
+    }
+
+    const { error, value } = createSecurityTokenSchema.validate(req.body, {
+      abortEarly: false,
+    });
+    if (error) {
+      const errors = error.details.map((detail) => detail.message);
+      return res.status(400).json({ ok: false, message: errors[0], errors });
+    }
+
+    const existingMember = await prisma.member.findUnique({
+      where: { uid: targetUid },
+      select: { uid: true },
+    });
+
+    if (!existingMember) {
+      return res.status(404).json({ ok: false, message: "Member not found" });
+    }
+
+    const hashedSecurityToken = await argon2.hash(value.securityToken);
+    await prisma.member.update({
+      where: { uid: targetUid },
+      data: { secureToken: hashedSecurityToken },
+    });
+
+    return res
+      .status(200)
+      .json({ ok: true, message: "Security token created successfully" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const forgotSecurityToken = async (req, res) => {
+  try {
+    const targetUid = resolveTargetMemberUid(req);
+    if (!targetUid) {
+      return res
+        .status(400)
+        .json({ ok: false, message: "Member ID is required" });
+    }
+
+    const member = await prisma.member.findUnique({
+      where: { uid: targetUid },
+      select: {
+        uid: true,
+        secureToken: true,
+        email: true,
+        fullname: true,
+        businessName: true,
+      },
+    });
+
+    if (!member) {
+      return res.status(404).json({ ok: false, message: "Member not found" });
+    }
+
+    if (!member.secureToken) {
+      return res
+        .status(400)
+        .json({ ok: false, message: "Security token is not set" });
+    }
+
+    const code = random6Digit();
+    const hashedSecurityToken = await argon2.hash(code);
+    await prisma.member.update({
+      where: { uid: targetUid },
+      data: { secureToken: hashedSecurityToken },
+    });
+
+    void sendEmail(
+      member.email,
+      "Security Token Reset",
+      await resetCode(member.fullname || member.businessName || "Member", code),
+    ).catch((emailErr) => {
+      console.error(
+        "Member security token reset email failed:",
+        emailErr?.message || emailErr,
+      );
+    });
+
+    return res
+      .status(200)
+      .json({
+        ok: true,
+        message:
+          "Security token reset successfully. Check your email for temporary login",
+      });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const changeSecurityToken = async (req, res) => {
+  try {
+    const targetUid = resolveTargetMemberUid(req);
+    if (!targetUid) {
+      return res
+        .status(400)
+        .json({ ok: false, message: "Member ID is required" });
+    }
+
+    const { error, value } = changeSecurityTokenSchema.validate(req.body, {
+      abortEarly: false,
+    });
+    if (error) {
+      const errors = error.details.map((detail) => detail.message);
+      return res.status(400).json({ ok: false, message: errors[0], errors });
+    }
+
+    const member = await prisma.member.findUnique({
+      where: { uid: targetUid },
+      select: { uid: true, secureToken: true, email: true, fullname: true },
+    });
+
+    if (!member) {
+      return res.status(404).json({ ok: false, message: "Member not found" });
+    }
+
+    if (!member.secureToken) {
+      return res
+        .status(400)
+        .json({ ok: false, message: "Security token is not set" });
+    }
+
+    const isTokenValid = await argon2.verify(
+      member.secureToken,
+      value.oldSecurityToken,
+    );
+    if (!isTokenValid) {
+      return res
+        .status(400)
+        .json({ ok: false, message: "Old security token is incorrect" });
+    }
+
+    const ip =
+      req.ip || req.headers["x-forwarded-for"] || req.connection.remoteAddress;
+
+    const hashedSecurityToken = await argon2.hash(value.newSecurityToken);
+    await prisma.member.update({
+      where: { uid: targetUid },
+      data: { secureToken: hashedSecurityToken },
+    });
+
+    void sendEmail(
+      member.email,
+      "Security Token Changed Successfully",
+      await resetSuccessful(
+        member.fullname || member.businessName || "Member",
+        ip,
+        new Date().toLocaleString(),
+        "security",
+      ),
+    ).catch((emailErr) => {
+      console.error(
+        "Member security token change email failed:",
+        emailErr?.message || emailErr,
+      );
+    });
+
+    return res
+      .status(200)
+      .json({ ok: true, message: "Security token changed successfully" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const resetSecurityToken = async (req, res) => {
+  try {
+    const targetUid = resolveTargetMemberUid(req);
+    if (!targetUid) {
+      return res
+        .status(400)
+        .json({ ok: false, message: "Member ID is required" });
+    }
+
+    const { error, value } = resetSecurityTokenSchema.validate(req.body, {
+      abortEarly: false,
+    });
+    if (error) {
+      const errors = error.details.map((detail) => detail.message);
+      return res.status(400).json({ ok: false, message: errors[0], errors });
+    }
+
+    const existingMember = await prisma.member.findUnique({
+      where: { uid: targetUid },
+      select: { uid: true },
+    });
+
+    if (!existingMember) {
+      return res.status(404).json({ ok: false, message: "Member not found" });
+    }
+
+    const hashedSecurityToken = await argon2.hash(value.currentSecurityToken);
+    await prisma.member.update({
+      where: { uid: targetUid },
+      data: { secureToken: hashedSecurityToken },
+    });
+
+    return res
+      .status(200)
+      .json({ ok: true, message: "Security token reset successfully" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const verifySecurityCode = async (req, res) => {
+  try {
+    const targetUid = resolveTargetMemberUid(req);
+    if (!targetUid) {
+      return res
+        .status(400)
+        .json({ ok: false, message: "Member ID is required" });
+    }
+
+    const { error, value } = verifySecurityCodeSchema.validate(req.body, {
+      abortEarly: false,
+    });
+    if (error) {
+      const errors = error.details.map((detail) => detail.message);
+      return res.status(400).json({ ok: false, message: errors[0], errors });
+    }
+
+    const member = await prisma.member.findUnique({
+      where: { uid: targetUid },
+      select: { uid: true, secureToken: true },
+    });
+
+    if (!member) {
+      return res.status(404).json({ ok: false, message: "Member not found" });
+    }
+
+    if (!member.secureToken) {
+      return res
+        .status(400)
+        .json({ ok: false, message: "Security token is not set" });
+    }
+
+    const isValid = await argon2.verify(member.secureToken, value.securityCode);
+
+    return res.status(200).json({
+      ok: true,
+      message: isValid
+        ? "Security code verified successfully"
+        : "Invalid security code",
+      verified: isValid,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const updateBillingFrequency = async (req, res) => {
+  try {
+    const { error, value } = billingFrequencySchema.validate(req.body, {
+      abortEarly: false,
+    });
+    if (error) {
+      const errors = error.details.map((detail) => detail.message);
+      return res.status(400).json({
+        ok: false,
+        message: errors[0],
+        errors,
+      });
+    }
+
+    const freq = value.frequency?.toUpperCase();
+
+    const member = await prisma.member.update({
+      where: { uid: req.params.id },
+      data: { billingFrequency: freq },
+      select: memberSafeSelect,
+    });
+
+    if (!member) {
+      return res.status(404).json({ ok: false, message: "Member not found" });
+    }
+
+    try {
+      await prisma.notification.create({
+        data: {
+          userId: member.uid,
+          title: "Billing Frequency Updated",
+          description: `Your billing frequency has been updated to ${freq}.`,
+          type: "UPDATE",
+          date: new Date(),
+        },
+      });
+    } catch (notificationError) {
+      console.error(
+        "Failed to create billing update notification:",
+        notificationError.message || notificationError,
+      );
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: "Billing frequency updated successfully",
+      member,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const getMembersByAgentId = async (req, res) => {
+  try {
+    const { agentId } = req.params;
+
+    if (!agentId) {
+      return res
+        .status(400)
+        .json({ ok: false, message: "Agent ID is required" });
+    }
+
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(
+      Math.max(parseInt(req.query.limit, 10) || 20, 1),
+      100,
+    );
+    const skip = (page - 1) * limit;
+
+    const [members, total] = await Promise.all([
+      prisma.member.findMany({
+        where: { agent: agentId },
+        skip,
+        take: limit,
+        select: {
+          ...memberSafeSelect,
+        },
+      }),
+      prisma.member.count({ where: { agent: agentId } }),
+    ]);
+
+    return res.status(200).json({
+      ok: true,
+      data: members,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const getMembersByPricingId = async (req, res) => {
+  try {
+    const { pricingId } = req.params;
+
+    if (!pricingId) {
+      return res
+        .status(400)
+        .json({ ok: false, message: "Pricing ID is required" });
+    }
+
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(
+      Math.max(parseInt(req.query.limit, 10) || 20, 1),
+      100,
+    );
+    const skip = (page - 1) * limit;
+
+    const [members, total] = await Promise.all([
+      prisma.member.findMany({
+        where: { pricing: { has: pricingId } },
+        skip,
+        take: limit,
+        select: {
+          ...memberSafeSelect,
+        },
+      }),
+      prisma.member.count({ where: { pricing: { has: pricingId } } }),
+    ]);
+
+    return res.status(200).json({
+      ok: true,
+      data: members,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const updateBalance = async (req, res) => {
+  try {
+    return res.status(400).json({
+      ok: false,
+      message:
+        "Balance is no longer tracked on member records in the current schema.",
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const updateDueBalance = async (req, res) => {
+  try {
+    return res.status(400).json({
+      ok: false,
+      message:
+        "Due balance is no longer tracked on member records in the current schema.",
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const pricingAction = async (req, res) => {
+  try {
+    const targetUid = resolveTargetMemberUid(req);
+    if (!targetUid) {
+      return res
+        .status(400)
+        .json({ ok: false, message: "Member ID is required" });
+    }
+
+    const { error, value } = pricingActionSchema.validate(req.body, {
+      abortEarly: false,
+      stripUnknown: true,
+    });
+
+    if (error) {
+      const errors = error.details.map((detail) => detail.message);
+      return res.status(400).json({ ok: false, message: errors[0], errors });
+    }
+
+    const member = await prisma.member.findUnique({
+      where: { uid: targetUid },
+      select: { uid: true, pricing: true },
+    });
+
+    if (!member) {
+      return res.status(404).json({ ok: false, message: "Member not found" });
+    }
+
+    const incomingIds = value.ids
+      .map((item) => String(item).trim())
+      .filter(Boolean);
+    const currentPricing = Array.isArray(member.pricing) ? member.pricing : [];
+    let nextPricing = currentPricing;
+
+    if (value.action === "upgrade") {
+      nextPricing = Array.from(new Set([...currentPricing, ...incomingIds]));
+    } else {
+      const removeSet = new Set(incomingIds);
+      nextPricing = currentPricing.filter((item) => !removeSet.has(item));
+    }
+
+    const updatedMember = await prisma.member.update({
+      where: { uid: targetUid },
+      data: { pricing: nextPricing },
+      select: {
+        uid: true,
+        pricing: true,
+      },
+    });
+
+    return res.status(200).json({
+      ok: true,
+      message:
+        value.action === "upgrade"
+          ? "Pricing IDs upgraded successfully"
+          : "Pricing IDs downgraded successfully",
+      member: updatedMember,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const changeMemberAgent = async (req, res) => {
+  try {
+    const { error, value } = changeMemberAgentSchema.validate(req.body, {
+      abortEarly: false,
+      stripUnknown: true,
+    });
+
+    if (error) {
+      const errors = error.details.map((detail) => detail.message);
+      return res.status(400).json({ ok: false, message: errors[0], errors });
+    }
+
+    const [member, agent] = await Promise.all([
+      prisma.member.findUnique({
+        where: { uid: value.userId },
+        select: { uid: true, fullname: true, agent: true },
+      }),
+      prisma.agent.findUnique({
+        where: { uid: value.agentId },
+        select: { uid: true, fullname: true },
+      }),
+    ]);
+
+    if (!member) {
+      return res.status(404).json({ ok: false, message: "Member not found" });
+    }
+
+    if (!agent) {
+      return res.status(404).json({ ok: false, message: "Agent not found" });
+    }
+
+    const updatedMember = await prisma.member.update({
+      where: { uid: value.userId },
+      data: { agent: value.agentId },
+      select: memberSafeSelect,
+    });
+
+    return res.status(200).json({
+      ok: true,
+      message: "Member agent updated successfully",
+      member: updatedMember,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+export {
+  createMember,
+  getMembers,
+  getMember,
+  getMembersByAgentId,
+  updateMember,
+  getMembersByPricingId,
+  deleteMember,
+  login,
+  forgotPassword,
+  resetPassword,
+  createSecurityToken,
+  forgotSecurityToken,
+  changeSecurityToken,
+  resetSecurityToken,
+  verifySecurityCode,
+  updateBillingFrequency,
+  updateBalance,
+  updateDueBalance,
+  pricingAction,
+  changeMemberAgent,
+};

@@ -1,0 +1,55 @@
+<svg width="1200" height="900" viewBox="0 0 1200 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ECFDF5"/>
+      <stop offset="1" stop-color="#E0F2FE"/>
+    </linearGradient>
+    <linearGradient id="card" x1="200" y1="140" x2="980" y2="760" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#F8FAFC" stop-opacity="0.98"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="300" y1="220" x2="900" y2="620" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10B981"/>
+      <stop offset="1" stop-color="#14B8A6"/>
+    </linearGradient>
+    <filter id="blur" x="-200" y="-200" width="1600" height="1300" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="30"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="900" fill="url(#bg)"/>
+
+  <g filter="url(#blur)" opacity="0.55">
+    <circle cx="170" cy="170" r="130" fill="#34D399"/>
+    <circle cx="1060" cy="130" r="145" fill="#38BDF8"/>
+    <circle cx="990" cy="790" r="170" fill="#99F6E4"/>
+  </g>
+
+  <rect x="190" y="130" width="820" height="620" rx="38" fill="url(#card)" stroke="#D1FAE5" stroke-width="2"/>
+
+  <rect x="250" y="210" width="300" height="170" rx="22" fill="#F8FAFC" stroke="#E2E8F0"/>
+  <text x="280" y="252" font-family="Segoe UI, Arial" font-size="22" font-weight="700" fill="#0F172A">Collection Volume</text>
+  <text x="280" y="300" font-family="Segoe UI, Arial" font-size="40" font-weight="800" fill="#10B981">₦42.7M</text>
+  <text x="280" y="335" font-family="Segoe UI, Arial" font-size="16" fill="#64748B">This quarter</text>
+
+  <rect x="580" y="210" width="360" height="170" rx="22" fill="#0F172A"/>
+  <text x="610" y="252" font-family="Segoe UI, Arial" font-size="21" font-weight="700" fill="#F8FAFC">Wallet Distribution</text>
+  <rect x="610" y="275" width="280" height="20" rx="10" fill="#334155"/>
+  <rect x="610" y="275" width="195" height="20" rx="10" fill="url(#accent)"/>
+  <rect x="610" y="314" width="230" height="14" rx="7" fill="#1E293B"/>
+  <rect x="610" y="344" width="260" height="14" rx="7" fill="#1E293B"/>
+
+  <rect x="250" y="420" width="690" height="270" rx="22" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <text x="280" y="460" font-family="Segoe UI, Arial" font-size="22" font-weight="700" fill="#0F172A">Revenue Trend</text>
+
+  <polyline points="300,610 390,560 470,575 560,510 650,525 740,470 830,485 900,430" stroke="url(#accent)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <circle cx="390" cy="560" r="8" fill="#10B981"/>
+  <circle cx="560" cy="510" r="8" fill="#10B981"/>
+  <circle cx="740" cy="470" r="8" fill="#10B981"/>
+  <circle cx="900" cy="430" r="8" fill="#10B981"/>
+
+  <rect x="300" y="640" width="120" height="20" rx="10" fill="#E2E8F0"/>
+  <rect x="450" y="640" width="130" height="20" rx="10" fill="#E2E8F0"/>
+  <rect x="610" y="640" width="100" height="20" rx="10" fill="#E2E8F0"/>
+</svg>

@@ -1,0 +1,3 @@
+-- This migration file was restored to fix broken migration history.
+-- Original SQL is unavailable in the repository snapshot.
+-- Intentionally left as a no-op to unblock future migrations.

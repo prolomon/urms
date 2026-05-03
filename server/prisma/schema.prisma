@@ -1,0 +1,287 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+  engineType = "binary"
+}
+
+model Member {
+  id               String   @id @default(cuid())
+  uid              String   @unique
+  fullname         String
+  businessName     String?
+  center           String
+  email            String   @unique
+  phone            String
+  type             BusinessType   @default(BUSINESS)
+  billingFrequency BillingFrequency @default(MONTHLY)
+  password         String
+  category         String @default("SMALL") 
+  location         Json?
+  status           Boolean  @default(true)
+  avatar           String?
+  paystackCustomerId String?
+  paystackCustomerCode String?
+  secureToken   String?
+  pricing      String[]
+  role             Role             @default(USER)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  notifications    Notification[]
+  payments         Payment[]
+  agent            String           @default("AGT-20260101-abscrs")
+
+  @@index([uid, email, center, paystackCustomerId, paystackCustomerCode, secureToken, status, type])
+}
+
+model Company {
+  id          String   @id @default(cuid())
+  uid         String   @unique
+  name        String
+  phone       String
+  email       String   @unique
+  avatar      String?
+  status      Boolean  @default(true)
+  center      String
+  role        String   @default("COMPANY")
+  secureToken String?
+  accountCode String?
+  location    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([uid, email, center, accountCode, secureToken, status])
+}
+
+model Staff {
+  id        String   @id @default(cuid())
+  uid       String   @unique
+  fullname  String
+  email     String   @unique
+  phone     String
+  gender    String
+  status    Boolean  @default(true)
+  password  String
+  location  Json?
+  avatar    String?
+  center    String
+  role      String   @default("STAFF")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([uid, email, center, status])
+}
+
+model Wallet {
+  id        String   @id @default(cuid())
+  memberId  String? 
+  adminId   String?
+  agentId   String?
+  balance   Float    @default(0.00)
+  accountNo String   @unique
+  accountName String
+  currency  String
+  bank      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  status    Boolean  @default(true)
+  identification String?
+  verify    Boolean  @default(false)
+
+  @@index([memberId, agentId, adminId, accountNo])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  description String
+  date        DateTime @default(now())
+  type        NotificationType
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  member      Member   @relation(fields: [userId], references: [uid])
+}
+
+model Payment {
+  id           String        @id @default(cuid())
+  reference    String        @unique
+  userId       String
+  businessName String
+  businessType String 
+  frequency    BillingFrequency
+  date         DateTime      @default(now())
+  due          DateTime      @default(now())
+  amount       Float
+  payment      String
+  status       PaymentStatus @default(PENDING)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  member      Member   @relation(fields: [userId], references: [uid])
+  isVerify    Boolean       @default(false)
+  transactions Transaction[]
+}
+
+model Transaction {
+  id              String            @id @default(cuid())
+  reference       String
+  event           String
+  status          TransactionStatus @default(PENDING)
+  amount          Float
+  currency        String            @default("NGN")
+  channel         String?
+  gatewayResponse String?
+  customerEmail   String?
+  paymentReference String?
+  userId          String?
+  metadata        Json?
+  rawPayload      Json?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  payment         Payment?          @relation(fields: [paymentReference], references: [id])
+
+  @@unique([reference, event])
+  @@index([reference, userId, paymentReference, status, event, customerEmail])
+}
+
+model Agent {
+  id        String   @id @default(cuid())
+  uid       String   @unique
+  fullname  String
+  email     String   @unique
+  phone     String
+  gender    String
+  status    Boolean  @default(true)
+  password  String
+  location  String
+  avatar    String?
+  center    String
+  batchNo   String?
+  company   String?
+  paystackCustomerId String?
+  paystackCustomerCode String?
+  secureToken   String?
+  role      Role     @default(ADMIN)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([uid, email, center, id, paystackCustomerId, paystackCustomerCode, secureToken, status])
+}
+
+model Admin {
+  id            String   @id @default(cuid())
+  uid           String   @unique 
+  center        String
+  email         String   @unique
+  password      String
+  phone         String
+  adminName      String
+  adminEmail     String
+  adminPhone     String
+  adminLocation  String
+  avatar        String?
+  role          Role     @default(ADMIN)
+  location      Json?
+  state         String?
+  address       String?
+  lga           String?
+  country       String?
+  status        Boolean  @default(true)
+  paymentConfig Json?
+  paystackCustomerId String?
+  paystackCustomerCode String?
+  secureToken   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([uid, email, center, paystackCustomerId, paystackCustomerCode, secureToken, state, status])
+}
+
+model Pricing {
+  status    Boolean  @default(true)
+  id        String   @id @default(cuid())
+  title     String
+  price     String
+  category  String  @default("SMALL")
+  type      PricingType @default(BUSINESS)
+  benefit   String?
+  center    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([id, type])
+} 
+
+model Recruitment {
+  id        String   @id @default(cuid())
+  fullname  String
+  email     String
+  phone     String
+  dob       DateTime
+  gender    String
+  state     String
+  lga       String
+  address   String
+  accountNumber String
+  bank      String
+  accountName String
+  isCopper  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email, phone, state, lga, accountNumber])
+}
+
+enum BusinessType {
+  BUSINESS
+  INDIVIDUAL
+}
+
+enum BillingFrequency {
+  MONTHLY
+  YEARLY
+  QUARTERLY
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum NotificationType {
+  UPDATE
+  SUCCESS
+  FAILED
+  PENDING
+  REQUEST
+  REMINDER
+  WELCOME
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum PricingType {
+  INDIVIDUAL
+  BUSINESS
+}
+
