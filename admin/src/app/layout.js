@@ -1,6 +1,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
+import { PartnerProvider } from "@/context/PartnerContext";
 import { CookieConsentPopup } from "@/components/CookieConsentPopup";
 
 const geistSans = Geist({
@@ -24,7 +25,11 @@ export default function RootLayout({ children }) {
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-50`}
       >
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <PartnerProvider>
+            {children}
+          </PartnerProvider>
+        </AuthProvider>
         <CookieConsentPopup />
       </body>
     </html>

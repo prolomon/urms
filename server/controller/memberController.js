@@ -11,6 +11,7 @@ import {
   billingFrequencySchema,
   pricingActionSchema,
   changeMemberAgentSchema,
+  changeMemberCompanySchema,
 } from "../validator/memberValidator.js";
 import { customAlphabet } from "nanoid";
 import { sendEmail } from "../service/mail.js";
@@ -42,8 +43,7 @@ const memberSafeSelect = {
   createdAt: true,
   updatedAt: true,
   pricing: true,
-  paystackCustomerCode: true,
-  paystackCustomerId: true,
+  company: true
 };
 
 const looksLikeJwt = (value) => typeof value === "string" && value.split(".").length === 3;
@@ -80,8 +80,6 @@ const createMember = async (req, res) => {
       });
     }
 
-    console.log(value);
-
     const existing = await prisma.member.findUnique({
       where: { email: value.email },
       select: { id: true },
@@ -100,7 +98,7 @@ const createMember = async (req, res) => {
     const maxAttempts = 5;
 
     while (!genUid && attempts < maxAttempts) {
-      const candidateUid = `URMSC-${generateMemberUidSuffix()}`;
+      const candidateUid = `MEB-${generateMemberUidSuffix()}`;
       const existingMemberWithUid = await prisma.member.findUnique({
         where: { uid: candidateUid },
         select: { id: true },
@@ -130,7 +128,8 @@ const createMember = async (req, res) => {
         password: hashedPassword,
         location: value.location,
         avatar: value.avatar,
-        agent: value.agent || "AGT-20260101-abscrs",
+        agent: value.agent || null,
+        company: value.company || null,
         uid: genUid,
         pricing: value.pricing || [],
       },
@@ -140,86 +139,6 @@ const createMember = async (req, res) => {
       return res
         .status(500)
         .json({ ok: false, message: "Failed to create member" });
-    }
-
-    const createPaystackCustomer = await createCustomer(
-      member.email,
-      member.fullname.split(" ")[0],
-      member.fullname.split(" ")[1] || "",
-      member.phone || "",
-    );
-
-    if (!createPaystackCustomer?.status) {
-      console.error(
-        "Failed to create Paystack customer:",
-        createPaystackCustomer?.message || "Unknown error",
-      );
-    }
-
-    const paystackId = createPaystackCustomer?.data?.id;
-    const paystackCode = createPaystackCustomer?.data?.customer_code;
-
-    if (!paystackId || !paystackCode) {
-      console.error(
-        "Paystack returned incomplete customer payload:",
-        createPaystackCustomer?.data || null,
-      );
-    } else {
-      await prisma.member.update({
-        where: { uid: member.uid },
-        data: {
-          paystackCustomerId: String(paystackId),
-          paystackCustomerCode: paystackCode,
-        },
-      });
-    }
-
-    const existingWallet = await prisma.wallet.findFirst({
-      where: { memberId: member.uid },
-    });
-
-    if (!existingWallet) {
-      const walletAccount = await createAccount(paystackCode);
-
-      if (walletAccount?.status) {
-        const walletAccountNo = walletAccount?.data?.account_number;
-        const walletBank = walletAccount?.data?.bank;
-
-        if (walletAccountNo && walletBank?.name) {
-          await prisma.wallet.create({
-            data: {
-              memberId: member.uid,
-              accountNo: walletAccountNo,
-              bank: {
-                name: walletBank.name,
-                id: walletBank.id,
-                code: walletBank.code,
-              },
-              balance: 0.0,
-              status: walletAccount?.data?.active ? true : false,
-              accountName: walletAccount?.data?.account_name,
-              currency: walletAccount?.data?.currency,
-            },
-          });
-
-          void sendEmail(
-            member.email,
-            "Wallet Created Successfully",
-            await walletCreation(
-              member.fullname,
-              walletAccountNo,
-              walletBank.code,
-              walletAccount?.data?.account_name,
-              walletBank.name,
-            ),
-          ).catch((emailErr) => {
-            console.error(
-              "Member wallet creation email failed:",
-              emailErr?.message || emailErr,
-            );
-          });
-        }
-      }
     }
 
     void sendEmail(
@@ -255,6 +174,7 @@ const createMember = async (req, res) => {
           date: new Date(),
         },
       });
+      
     } catch (notificationError) {
       console.error(
         "Failed to create welcome notification:",
@@ -1055,6 +975,50 @@ const getMembersByPricingId = async (req, res) => {
   }
 };
 
+const getMembersByCompanyId = async (req, res) => {
+  try {
+    const { companyId } = req.params;
+
+    if (!companyId) {
+      return res
+        .status(400)
+        .json({ ok: false, message: "Company ID is required" });
+    }
+
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(
+      Math.max(parseInt(req.query.limit, 10) || 20, 1),
+      100,
+    );
+    const skip = (page - 1) * limit;
+    const where = { company: companyId };
+
+    const [members, total] = await Promise.all([
+      prisma.member.findMany({
+        where,
+        skip,
+        take: limit,
+        select: memberSafeSelect,
+      }),
+      prisma.member.count({ where }),
+    ]);
+
+    return res.status(200).json({
+      ok: true,
+      data: members,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
 const updateBalance = async (req, res) => {
   try {
     return res.status(400).json({
@@ -1193,6 +1157,54 @@ const changeMemberAgent = async (req, res) => {
   }
 };
 
+const changeMemberCompany = async (req, res) => {
+  try {
+    const { error, value } = changeMemberCompanySchema.validate(req.body, {
+      abortEarly: false,
+      stripUnknown: true,
+    });
+
+    if (error) {
+      const errors = error.details.map((detail) => detail.message);
+      return res.status(400).json({ ok: false, message: errors[0], errors });
+    }
+
+    const [member, company] = await Promise.all([
+      prisma.member.findUnique({
+        where: { uid: value.userId },
+        select: { uid: true, fullname: true, company: true },
+      }),
+      prisma.company.findUnique({
+        where: { uid: value.companyId },
+        select: { uid: true, name: true },
+      }),
+    ]);
+
+    if (!member) {
+      return res.status(404).json({ ok: false, message: "Member not found" });
+    }
+
+    if (!company) {
+      return res.status(404).json({ ok: false, message: "Company not found" });
+    }
+
+    const updatedMember = await prisma.member.update({
+      where: { uid: value.userId },
+      data: { company: value.companyId, agent: "" },
+      select: memberSafeSelect,
+    });
+
+    return res.status(200).json({
+      ok: true,
+      message: "Member company updated successfully",
+      member: updatedMember,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
 export {
   createMember,
   getMembers,
@@ -1214,4 +1226,6 @@ export {
   updateDueBalance,
   pricingAction,
   changeMemberAgent,
+  changeMemberCompany,
+  getMembersByCompanyId,
 };

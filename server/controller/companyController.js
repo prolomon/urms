@@ -1,14 +1,46 @@
 import { prisma } from "../config/db.js";
+import argon2 from "argon2";
+import { TextEncoder } from "util";
 import { customAlphabet } from "nanoid";
 import {
   createCompanySchema,
   updateCompanySchema,
+  resetPasswordSchema,
+  changePasswordSchema,
+  createSecurityTokenSchema,
+  changeSecurityTokenSchema,
+  verifySecurityCodeSchema,
+  loginCompanySchema,
 } from "../validator/companyValidator.js";
+import { sendEmail } from "../service/mail.js";
+import { verifyProtocol } from "../service/mail.js";
+import { loginAlert } from "../service/templates.js";
+
+const joseImport = () => import("jose");
+const jwtSecret = process.env.JWT_SECRET;
+const jwtExpiresIn = process.env.JWT_EXPIRES_IN || "3d";
+
+const generateAuthToken = async (payload) => {
+  if (!jwtSecret) {
+    throw new Error("JWT_SECRET is not configured");
+  }
+
+  const { SignJWT } = await joseImport();
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setIssuedAt()
+    .setExpirationTime(jwtExpiresIn)
+    .sign(new TextEncoder().encode(jwtSecret));
+};
 
 const generateCompanyUidSuffix = customAlphabet(
   "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
   10,
 );
+
+const random6Digit = () => {
+  return String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0");
+};
 
 const companySafeSelect = {
   id: true,
@@ -55,7 +87,7 @@ const createCompany = async (req, res) => {
     let attempts = 0;
 
     while (!uid && attempts < 5) {
-      const candidateUid = `URMSC-${generateCompanyUidSuffix()}`;
+      const candidateUid = `PRT-${generateCompanyUidSuffix()}`;
       const existingCompanyWithUid = await prisma.company.findUnique({
         where: { uid: candidateUid },
         select: { id: true },
@@ -79,6 +111,7 @@ const createCompany = async (req, res) => {
       data: {
         uid,
         name: value.name,
+        password: await argon2.hash(value.phone),
         phone: value.phone,
         email: value.email,
         avatar: value.avatar,
@@ -118,6 +151,40 @@ const getCompanies = async (req, res) => {
         orderBy: { createdAt: "desc" },
       }),
       prisma.company.count(),
+    ]);
+
+    return res.status(200).json({
+      ok: true,
+      data: companies,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const getCompaniesByCenter = async (req, res) => {
+  try {
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+    const skip = (page - 1) * limit;
+    const where = { center: String(req.params.center) };
+
+    const [companies, total] = await Promise.all([
+      prisma.company.findMany({
+        where,
+        skip,
+        take: limit,
+        select: companySafeSelect,
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.company.count({ where }),
     ]);
 
     return res.status(200).json({
@@ -214,7 +281,7 @@ const deleteCompany = async (req, res) => {
       where: { uid: String(req.params.uid) },
     });
 
-    return res.status(204).send();
+    return res.status(200).json({ ok: true, message: "Company deleted successfully" });
   } catch (err) {
     if (err?.code === "P2025") {
       return res.status(404).json({ ok: false, message: "Company not found" });
@@ -225,4 +292,317 @@ const deleteCompany = async (req, res) => {
   }
 };
 
-export { createCompany, getCompanies, getCompany, updateCompany, deleteCompany };
+const resetPassword = async (req, res) => {
+  try {
+    const companyUid = String(req.params.uid);
+
+    const company = await prisma.company.findUnique({
+      where: { uid: companyUid },
+      select: { uid: true, email: true, name: true },
+    });
+
+    if (!company) {
+      return res.status(404).json({ ok: false, message: "Company not found" });
+    }
+
+    const code = random6Digit();
+    const hashedPassword = await argon2.hash(code);
+
+    await prisma.company.update({
+      where: { uid: companyUid },
+      data: { password: hashedPassword },
+    });
+
+    return res.status(200).json({
+      ok: true,
+      message: "Password reset successfully. Temporary password sent to email",
+      temporaryPassword: code,
+    });
+  } catch (err) {
+    if (err?.code === "P2025") {
+      return res.status(404).json({ ok: false, message: "Company not found" });
+    }
+
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const changePassword = async (req, res) => {
+  try {
+    const { error, value } = changePasswordSchema.validate(req.body, {
+      abortEarly: false,
+    });
+
+    if (error) {
+      const errors = error.details.map((detail) => detail.message);
+      return res.status(400).json({
+        ok: false,
+        message: errors[0],
+        errors,
+      });
+    }
+
+    const companyUid = String(req.params.uid);
+
+    const company = await prisma.company.findUnique({
+      where: { uid: companyUid },
+      select: { uid: true, password: true },
+    });
+
+    if (!company) {
+      return res.status(404).json({ ok: false, message: "Company not found" });
+    }
+
+    const isPasswordValid = await argon2.verify(
+      company.password,
+      value.currentPassword
+    );
+
+    if (!isPasswordValid) {
+      return res
+        .status(401)
+        .json({ ok: false, message: "Current password is incorrect" });
+    }
+
+    const hashedPassword = await argon2.hash(value.newPassword);
+
+    await prisma.company.update({
+      where: { uid: companyUid },
+      data: { password: hashedPassword },
+    });
+
+    return res.status(200).json({
+      ok: true,
+      message: "Password changed successfully",
+    });
+  } catch (err) {
+    if (err?.code === "P2025") {
+      return res.status(404).json({ ok: false, message: "Company not found" });
+    }
+
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const loginCompany = async (req, res) => {
+  try {
+    const { error, value } = loginCompanySchema.validate(req.body, {
+      abortEarly: false,
+    });
+
+    if (error) {
+      const errors = error.details.map((detail) => detail.message);
+      return res.status(400).json({
+        ok: false,
+        message: errors[0],
+        errors: errors,
+      });
+    }
+
+    await verifyProtocol();
+
+    const { email, password } = value;
+    const ip =
+      req.ip || req.headers["x-forwarded-for"] || req.connection.remoteAddress;
+
+    const company = await prisma.company.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        uid: true,
+        name: true,
+        email: true,
+        password: true,
+        avatar: true,
+        role: true,
+        phone: true,
+        center: true,
+        status: true,
+        secureToken: true,
+        accountCode: true,
+        location: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!company) {
+      return res
+        .status(401)
+        .json({ ok: false, message: "Invalid email or password" });
+    }
+
+    const isPasswordValid = await argon2.verify(company.password, password);
+    if (!isPasswordValid) {
+      return res
+        .status(401)
+        .json({ ok: false, message: "Invalid email or password" });
+    }
+
+    const { password: pwd, ...companyWithoutPassword } = company;
+    const token = await generateAuthToken({
+      uid: company.uid,
+      role: company.role,
+      type: "company",
+    });
+
+    void sendEmail(
+      company.email,
+      "Login Alert from URMS",
+      await loginAlert(
+        company.name || company.center || "Company",
+        new Date().toLocaleString(),
+        ip,
+      ),
+    ).catch((emailErr) => {
+      console.error(
+        "Company login alert email failed:",
+        emailErr?.message || emailErr,
+      );
+    });
+
+    return res.status(200).json({
+      ok: true,
+      message: "Login successful",
+      company: companyWithoutPassword,
+      token,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const createSecurityToken = async (req, res) => {
+  try {
+    const { error, value } = createSecurityTokenSchema.validate(req.body, {
+      abortEarly: false,
+    });
+
+    if (error) {
+      const errors = error.details.map((detail) => detail.message);
+      return res.status(400).json({ ok: false, message: errors[0], errors });
+    }
+
+    const companyUid = String(req.params.uid);
+
+    const company = await prisma.company.findUnique({
+      where: { uid: companyUid },
+      select: { uid: true },
+    });
+
+    if (!company) {
+      return res.status(404).json({ ok: false, message: "Company not found" });
+    }
+
+    const hashed = await argon2.hash(value.securityToken);
+    await prisma.company.update({ where: { uid: companyUid }, data: { secureToken: hashed } });
+
+    return res.status(200).json({ ok: true, message: "Security token created successfully" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const forgotSecurityToken = async (req, res) => {
+  try {
+    const companyUid = String(req.params.uid);
+
+    const company = await prisma.company.findUnique({
+      where: { uid: companyUid },
+      select: { uid: true, email: true, name: true },
+    });
+
+    if (!company) {
+      return res.status(404).json({ ok: false, message: "Company not found" });
+    }
+
+    const code = random6Digit();
+    const hashed = await argon2.hash(code);
+
+    await prisma.company.update({ where: { uid: companyUid }, data: { secureToken: hashed } });
+
+    void sendEmail(company.email, "Security Token Reset", await resetCode(company.name || company.email || "Company", code)).catch((emailErr) => {
+      console.error("Company security token reset email failed:", emailErr?.message || emailErr);
+    });
+
+    return res.status(200).json({ ok: true, message: "Security token reset successfully. Check your email for temporary code" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const changeSecurityToken = async (req, res) => {
+  try {
+    const { error, value } = changeSecurityTokenSchema.validate(req.body, { abortEarly: false });
+    if (error) {
+      const errors = error.details.map((detail) => detail.message);
+      return res.status(400).json({ ok: false, message: errors[0], errors });
+    }
+
+    const companyUid = String(req.params.uid);
+
+    const company = await prisma.company.findUnique({ where: { uid: companyUid }, select: { uid: true, secureToken: true, email: true, name: true } });
+    if (!company) return res.status(404).json({ ok: false, message: "Company not found" });
+
+    if (!company.secureToken) {
+      return res.status(400).json({ ok: false, message: "Security token is not set" });
+    }
+
+    const isValid = await argon2.verify(company.secureToken, value.oldSecurityToken);
+    if (!isValid) return res.status(400).json({ ok: false, message: "Old security token is incorrect" });
+
+    const hashed = await argon2.hash(value.newSecurityToken);
+    await prisma.company.update({ where: { uid: companyUid }, data: { secureToken: hashed } });
+
+    const ip = req.ip || req.headers["x-forwarded-for"] || req.connection.remoteAddress;
+    void sendEmail(company.email, "Security Token Changed", await resetSuccessful(company.name || company.email || "Company", ip, new Date().toLocaleString(), "security")).catch((emailErr) => console.error("Company security token change email failed:", emailErr?.message || emailErr));
+
+    return res.status(200).json({ ok: true, message: "Security token changed successfully" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const verifySecurityCode = async (req, res) => {
+  try {
+    const { error, value } = verifySecurityCodeSchema.validate(req.body, { abortEarly: false });
+    if (error) {
+      const errors = error.details.map((detail) => detail.message);
+      console.log(errors);
+      return res.status(400).json({ ok: false, message: errors[0], errors });
+    }
+
+    const companyUid = String(req.params.uid);
+    const company = await prisma.company.findUnique({ where: { uid: companyUid }, select: { uid: true, secureToken: true } });
+    if (!company) return res.status(404).json({ ok: false, message: "Company not found" });
+    if (!company.secureToken) return res.status(400).json({ ok: false, message: "Security token is not set" });
+
+    const isValid = await argon2.verify(company.secureToken, value.secureCode);
+    return res.status(200).json({ ok: true, message: isValid ? "Security code verified successfully" : "Invalid security code", verified: isValid });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+export {
+  createCompany,
+  getCompanies,
+  getCompaniesByCenter,
+  loginCompany,
+  getCompany,
+  updateCompany,
+  deleteCompany,
+  resetPassword,
+  changePassword,
+  createSecurityToken,
+  forgotSecurityToken,
+  changeSecurityToken,
+  verifySecurityCode,
+};

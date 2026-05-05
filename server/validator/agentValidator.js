@@ -34,6 +34,9 @@ const createAgentSchema = Joi.object({
   batchNo: Joi.string().optional().messages({
     'string.base': 'Batch number must be a string',
   }),
+  company: Joi.string().optional().messages({
+    'string.base': 'Company must be a string',
+  }),
   role: Joi.string().valid('ADMIN', 'USER').optional(),
 });
 
@@ -50,6 +53,9 @@ const updateAgentSchema = Joi.object({
   role: Joi.string().valid('ADMIN', 'USER').optional(),
   batchNo: Joi.string().optional().messages({
     'string.base': 'Batch number must be a string',
+  }),
+  company: Joi.string().optional().messages({
+    'string.base': 'Company must be a string',
   }),
 });
 

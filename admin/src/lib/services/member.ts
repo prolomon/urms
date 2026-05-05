@@ -11,7 +11,8 @@ export type Member = {
   email: string;
   phone: string;
   type: "BUSINESS" | "INDIVIDUAL";
-  category: "SMALL" | "MEDIUM" | "LARGE";
+  category: "";
+  company?: string;
   billingFrequency?: Frequency;
   password?: string;
   location?: {
@@ -33,20 +34,10 @@ export type Member = {
   agent?: string;
 };
 
-export async function getMembers(
-  page: number,
-  limit: number,
-  id: string,
-): Promise<{
-  data: Member[];
-  ok: boolean;
-  message?: string;
-  meta: { total: number; page: number; limit: number; totalPages: number };
+export async function getMembers( page: number, limit: number, id: string, ): Promise<{ data: Member[]; ok: boolean; message?: string; meta: { total: number; page: number; limit: number; totalPages: number };
 }> {
-  const response = await fetch(
-    `${API_URL}/member/${id}/center?page=${page}&limit=${limit}`,
-    { headers: { ...buildHeaders() } },
-  );
+  const response = await fetch(`${API_URL}/member/${id}/center?page=${page}&limit=${limit}`, { headers: { ...buildHeaders() } }, );
+
   const data = await response.json();
   if (!response.ok) {
     throw new Error(data.message || "Failed to fetch members");
@@ -150,6 +141,27 @@ export async function getMembersByAgentId(
   return data;
 }
 
+export async function getMembersByCompanyId(
+  page: number,
+  limit: number,
+  id: string,
+): Promise<{
+  data: Member[];
+  ok: boolean;
+  message?: string;
+  meta: { total: number; page: number; limit: number; totalPages: number };
+}> {
+  const response = await fetch(
+    `${API_URL}/member/company/${id}?page=${page}&limit=${limit}`,
+    { headers: { ...buildHeaders() } },
+  );
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to fetch members");
+  }
+  return data;
+}
+
 export async function getMembersByPricingId(
   page: number,
   limit: number,
@@ -179,6 +191,21 @@ export async function changeAgent(
     method: "PUT",
     headers: { ...buildHeaders(true) },
     body: JSON.stringify({ userId, agentId }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to update member");
+  }
+  return data;
+}
+export async function changeCompany(
+  userId: string,
+  companyId: string,
+): Promise<{ message: string; ok: boolean; member: Member }> {
+  const response = await fetch(`${API_URL}/member/change-company`, {
+    method: "PUT",
+    headers: { ...buildHeaders(true) },
+    body: JSON.stringify({ userId, companyId }),
   });
   const data = await response.json();
   if (!response.ok) {

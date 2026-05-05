@@ -1,15 +1,13 @@
 import express from "express";
 import {
   createWallet,
-  getWalletByMemberId,
-  getWalletByAdminId,
+  getWalletById,
   getAllWallets,
-  updateWalletBalanceByAdminId,
-  validateWalletOwnership,
-  createTransferRecipientController,
   initiateTransferController,
   resolveBankAccountController,
-  getWalletByAgentId
+  getBanksList,
+  getTransaction,
+  verifyTransfer,
 } from "../controller/walletController.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { roleMiddleware } from "../middleware/role.js";
@@ -18,13 +16,11 @@ const router = express.Router();
 
 router.post("/", authMiddleware, roleMiddleware(["admin"]), createWallet);
 router.get("/", authMiddleware, roleMiddleware(["admin"]), getAllWallets);
-router.get("/member/:memberId", authMiddleware, roleMiddleware(["user", "admin"]), getWalletByMemberId);
-router.get("/admin/:adminId", authMiddleware, roleMiddleware(["admin"]), getWalletByAdminId);
-router.get("/agent/:agentId", authMiddleware, roleMiddleware(["admin"]), getWalletByAgentId);
-router.put("/admin/:adminId/balance", authMiddleware, roleMiddleware(["admin"]), updateWalletBalanceByAdminId);
-router.post("/:id/validate-ownership/", authMiddleware, roleMiddleware(["admin"]), validateWalletOwnership);
-router.post("/transfer/recipient", authMiddleware, roleMiddleware(["admin"]), createTransferRecipientController);
+router.get("/:userId/:role", authMiddleware, roleMiddleware(["user", "admin"]), getWalletById);
+router.get("/banks", authMiddleware, roleMiddleware(["admin"]), getBanksList);
 router.post("/transfer/initiate", authMiddleware, roleMiddleware(["admin"]), initiateTransferController);
 router.post("/resolve-bank-account", authMiddleware, roleMiddleware(["admin"]), resolveBankAccountController);
+router.post("/transactions", authMiddleware, roleMiddleware(["admin", "user"]), getTransaction);
+router.post("/transfer/verify", authMiddleware, roleMiddleware(["admin", "user"]), verifyTransfer);
 
 export { router as walletRouter };

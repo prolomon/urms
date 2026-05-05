@@ -16,8 +16,8 @@ const createPricingSchema = Joi.object({
     'any.only': 'Type must be either BUSINESS or INDIVIDUAL',
     'any.required': 'Type is required',
   }),
-  category: Joi.string().valid('SMALL', 'MEDIUM', 'LARGE').optional().default('SMALL').messages({
-    'any.only': 'Category must be either SMALL, MEDIUM, or LARGE',
+  category: Joi.string().optional().messages({
+    'any.only': 'Category must not be empty',
   }),
   benefit: Joi.string().optional().messages({
     'string.base': 'Benefit must be a string',
@@ -38,8 +38,8 @@ const updatePricingSchema = Joi.object({
   type: Joi.string().valid('BUSINESS', 'INDIVIDUAL').optional().messages({
     'any.only': 'Type must be either BUSINESS or INDIVIDUAL',
   }),
-  category: Joi.string().valid('SMALL', 'MEDIUM', 'LARGE').optional().messages({
-    'any.only': 'Category must be either SMALL, MEDIUM, or LARGE',
+  category: Joi.string().optional().messages({
+    'any.only': 'Category must not be empty',
   }),
   benefit: Joi.string().optional().messages({
     'string.base': 'Benefit must be a string',
@@ -47,8 +47,8 @@ const updatePricingSchema = Joi.object({
   center: Joi.string().optional().allow(null, '').messages({
     'string.base': 'Center must be a string', 
   }),
-  category: Joi.string().valid('SMALL', 'MEDIUM', 'LARGE').optional().messages({
-    'any.only': 'Category must be either SMALL, MEDIUM, or LARGE',
+  status: Joi.boolean().optional().messages({
+    'boolean.base': 'Status must be a boolean',
   }),
 });
 
