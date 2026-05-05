@@ -3,6 +3,7 @@ CREATE TABLE "Company" (
     "id" TEXT NOT NULL,
     "uid" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "password" TEXT NOT NULL,
     "phone" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "avatar" TEXT,

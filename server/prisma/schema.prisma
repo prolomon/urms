@@ -25,24 +25,24 @@ model Member {
   location         Json?
   status           Boolean  @default(true)
   avatar           String?
-  paystackCustomerId String?
-  paystackCustomerCode String?
   secureToken   String?
   pricing      String[]
   role             Role             @default(USER)
+  company          String?
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   notifications    Notification[]
   payments         Payment[]
-  agent            String           @default("AGT-20260101-abscrs")
+  agent            String?           
 
-  @@index([uid, email, center, paystackCustomerId, paystackCustomerCode, secureToken, status, type])
+  @@index([uid, email, center, secureToken, status, type])
 }
 
 model Company {
   id          String   @id @default(cuid())
   uid         String   @unique
   name        String
+  password    String
   phone       String
   email       String   @unique
   avatar      String?
@@ -74,14 +74,13 @@ model Staff {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([uid, email, center, status])
+  @@index([uid, email, center, status, phone])
 }
 
 model Wallet {
   id        String   @id @default(cuid())
-  memberId  String? 
-  adminId   String?
-  agentId   String?
+  userId  String? 
+  role      Role
   balance   Float    @default(0.00)
   accountNo String   @unique
   accountName String
@@ -93,7 +92,7 @@ model Wallet {
   identification String?
   verify    Boolean  @default(false)
 
-  @@index([memberId, agentId, adminId, accountNo])
+  @@index([userId])
 }
 
 model Notification {
@@ -208,7 +207,7 @@ model Pricing {
   id        String   @id @default(cuid())
   title     String
   price     String
-  category  String  @default("SMALL")
+  category  String  
   type      PricingType @default(BUSINESS)
   benefit   String?
   center    String?
@@ -252,6 +251,9 @@ enum BillingFrequency {
 enum Role {
   USER
   ADMIN
+  AGENT
+  COMPANY
+  STAFF
 }
 
 enum NotificationType {

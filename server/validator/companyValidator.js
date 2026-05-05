@@ -19,8 +19,9 @@ const createCompanySchema = Joi.object({
     "string.email": "Email must be a valid email address",
     "any.required": "Email is required",
   }),
-  avatar: Joi.string().optional().messages({
+  avatar: Joi.string().min(1).optional().messages({
     "string.base": "Avatar must be a string",
+    "string.min": "Avatar cannot be empty",
   }),
   status: Joi.boolean().optional().default(true).messages({
     "boolean.base": "Status must be a boolean",
@@ -84,4 +85,114 @@ const updateCompanySchema = Joi.object({
   }),
 });
 
-export { createCompanySchema, updateCompanySchema };
+const resetPasswordSchema = Joi.object({
+  newPassword: Joi.string().min(6).required().messages({
+    "string.base": "New password must be a string",
+    "string.min": "New password must be at least 6 characters long",
+    "any.required": "New password is required",
+  }),
+  confirmPassword: Joi.string()
+    .valid(Joi.ref("newPassword"))
+    .required()
+    .messages({
+      "any.only": "Confirm password must match new password",
+      "any.required": "Confirm password is required",
+    }),
+});
+
+const changePasswordSchema = Joi.object({
+  currentPassword: Joi.string().required().messages({
+    "string.base": "Current password must be a string",
+    "any.required": "Current password is required",
+  }),
+  newPassword: Joi.string().min(6).required().messages({
+    "string.base": "New password must be a string",
+    "string.min": "New password must be at least 6 characters long",
+    "any.required": "New password is required",
+  }),
+  confirmPassword: Joi.string()
+    .valid(Joi.ref("newPassword"))
+    .required()
+    .messages({
+      "any.only": "Confirm password must match new password",
+      "any.required": "Confirm password is required",
+    }),
+});
+ 
+const loginCompanySchema = Joi.object({
+  email: Joi.string().email().required().messages({
+    'string.empty': 'Email is required',
+    'string.email': 'Email must be a valid email address',
+  }),
+  password: Joi.string().required().messages({
+    'string.empty': 'Password is required',
+  }),
+});
+
+const alphaNumPattern = /^[A-Za-z0-9]+$/;
+
+const createSecurityTokenSchema = Joi.object({
+  securityToken: Joi.string()
+    .pattern(alphaNumPattern)
+    .min(8)
+    .max(100)
+    .required()
+    .messages({
+      'string.pattern.base': 'Security token must contain only letters and numbers',
+      'string.min': 'Security token must be at least 8 characters long',
+      'string.max': 'Security token must be at most 100 characters long',
+      'string.empty': 'Security token is required',
+      'any.required': 'Security token is required',
+    }),
+  confirmSecurityToken: Joi.string()
+    .valid(Joi.ref('securityToken'))
+    .required()
+    .messages({
+      'any.only': 'Confirm security token must match security token',
+      'any.required': 'Confirm security token is required',
+    }),
+});
+
+const changeSecurityTokenSchema = Joi.object({
+  oldSecurityToken: Joi.string().pattern(alphaNumPattern).required().messages({
+    'string.pattern.base': 'Old security token must contain only letters and numbers',
+    'string.empty': 'Old security token is required',
+    'any.required': 'Old security token is required',
+  }),
+  newSecurityToken: Joi.string()
+    .pattern(alphaNumPattern)
+    .min(8)
+    .max(100)
+    .required()
+    .messages({
+      'string.pattern.base': 'New security token must contain only letters and numbers',
+      'string.min': 'New security token must be at least 8 characters long',
+      'string.max': 'New security token must be at most 100 characters long',
+      'string.empty': 'New security token is required',
+      'any.required': 'New security token is required',
+    }),
+  confirmSecurityToken: Joi.string()
+    .valid(Joi.ref('newSecurityToken'))
+    .required()
+    .messages({
+      'any.only': 'Confirm security token must match new security token',
+      'any.required': 'Confirm security token is required',
+    }),
+});
+
+const verifySecurityCodeSchema = Joi.object({
+  secureCode: Joi.string().required().messages({
+    'any.required': 'Security code is required',
+  }),
+});
+
+export {
+  createCompanySchema,
+  updateCompanySchema,
+  resetPasswordSchema,
+  changePasswordSchema,
+  loginCompanySchema,
+  createSecurityTokenSchema,
+  changeSecurityTokenSchema,
+  verifySecurityCodeSchema,
+};

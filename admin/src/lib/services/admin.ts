@@ -29,8 +29,6 @@ export type Admin = {
   adminEmail?: string;
   adminPhone?: string;
   adminLocation?: string;
-  paystackCustomerId?: string;
-  paystackCustomerCode?: string;
 };
 
 export type CreateAdminInput = Pick< Admin, | "center" | "email" | "password" | "location" | "state" | "address" | "lga" | "country" > & {
@@ -130,7 +128,7 @@ export async function changeSecurityToken(id: string, oldSecurityToken: string, 
     throw new Error(data.message || "Failed to change security Token");
   }
   return data;
-}
+} 
 
 export async function createSecurityToken(id: string, securityToken: string, confirmSecurityToken: string): Promise<{ ok: boolean; message?: string; error?: string }> {
   const response = await fetch(`${API_URL}/admin/${id}/security-token`, {

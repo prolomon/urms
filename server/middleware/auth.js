@@ -111,6 +111,29 @@ const authMiddleware = async (req, res, next) => {
     }
 
     if (!user) {
+      user = await prisma.company.findUnique({
+        where: { uid: userUid },
+        select: {
+          id: true,
+  uid: true,
+  name: true,
+  phone: true,
+  email: true,
+  avatar: true,
+  status: true,
+  center: true,
+  role: true,
+  secureToken: true,
+  accountCode: true,
+  location: true,
+  createdAt: true,
+  updatedAt: true,
+        },
+      });
+      userType = "company";
+    }
+
+    if (!user) {
       console.log(user)
       return res.status(401).json({ message: "Unauthorized: Invalid token." });
     }

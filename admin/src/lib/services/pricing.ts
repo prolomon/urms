@@ -73,6 +73,23 @@ export async function getPricingByCenter(id: string): Promise<{ ok: boolean; dat
   return data;
 }
 
+export async function getPricingById(id: string): Promise<{ ok: boolean; pricing: Pricing; message?: string }> {
+  const token = getTokenFromCookie();
+  if (!token) {
+    throw new Error("No authentication token found");
+  }
+
+  const response = await fetch(`${API_URL}/pricing/${id}`, {
+    method: "GET",
+    headers: { ...buildHeaders() },
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to fetch pricing");
+  }
+  return data;
+}
+
 export async function togglePricing(id: string): Promise<{ ok: boolean; pricing?: Pricing; message?: string }> {
   const response = await fetch(`${API_URL}/pricing/${id}/toggle-status`, {
     method: "PUT",

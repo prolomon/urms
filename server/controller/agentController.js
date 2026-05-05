@@ -87,7 +87,7 @@ const createAgent = async (req, res) => {
     let genUid;
 
     const existUid = await prisma.agent.findUnique({
-      where: { uid: `URMSAG-${generateAgentUidSuffix()}` },
+      where: { uid: `AGT-${generateAgentUidSuffix()}` },
     });
 
     if (existUid) {
@@ -105,7 +105,8 @@ const createAgent = async (req, res) => {
         location: value.location,
         gender: value.gender,
         role: value.role || "ADMIN",
-        uid: genUid || `URMSAG-${generateAgentUidSuffix()}`,
+        uid: genUid || `AGT-${generateAgentUidSuffix()}`,
+        company: value.company,
       },
     });
 
@@ -113,90 +114,6 @@ const createAgent = async (req, res) => {
       return res
         .status(500)
         .json({ ok: false, message: "Failed to create agent" });
-
-    const createPaystackCustomer = await createCustomer(
-      agent.email,
-      agent.fullname.split(" ")[0],
-      agent.fullname.split(" ")[1] || "",
-      agent.phone || "",
-    );
-
-    console.log("Paystack customer creation response:", createPaystackCustomer);
-
-    if (!createPaystackCustomer?.status) {
-      console.error(
-        "Failed to create Paystack customer:",
-        createPaystackCustomer?.message || "Unknown error",
-      );
-      return;
-    }
-
-    const paystackId = createPaystackCustomer?.data?.id;
-    const paystackCode = createPaystackCustomer?.data?.customer_code;
-
-    if (!paystackId || !paystackCode) {
-      console.error(
-        "Paystack returned incomplete customer payload:",
-        createPaystackCustomer?.data || null,
-      );
-      return;
-    }
-
-    await prisma.agent.update({
-      where: { uid: agent.uid },
-      data: {
-        paystackCustomerId: String(paystackId),
-        paystackCustomerCode: paystackCode,
-      },
-    });
-
-    const existingWallet = await prisma.wallet.findFirst({
-      where: { agentId: agent.uid },
-    });
-
-    if (!existingWallet) {
-      const walletAccount = await createAccount(paystackCode);
-
-      if (walletAccount?.status) {
-        const walletAccountNo = walletAccount?.data?.account_number;
-        const walletBank = walletAccount?.data?.bank;
-
-        if (walletAccountNo && walletBank?.name) {
-          await prisma.wallet.create({
-            data: {
-              agentId: agent.uid,
-              accountNo: walletAccountNo,
-              bank: {
-                name: walletBank.name,
-                id: walletBank.id,
-                code: walletBank.code,
-              },
-              balance: 0.0,
-              status: walletAccount?.data?.active ? true : false,
-              accountName: walletAccount?.data?.account_name,
-              currency: walletAccount?.data?.currency,
-            },
-          });
-
-          void sendEmail(
-            agent.email,
-            "Wallet Created Successfully",
-            await walletCreation(
-              agent.fullname,
-              walletAccountNo,
-              walletBank.code,
-              walletAccount?.data?.account_name,
-              walletBank.name,
-            ),
-          ).catch((emailErr) => {
-            console.error(
-              "Agent wallet creation email failed:",
-              emailErr?.message || emailErr,
-            );
-          });
-        }
-      }
-    }
 
     void sendEmail(
       agent.email,
@@ -313,6 +230,65 @@ const getAllAgentsByCenter = async (req, res) => {
       }),
       prisma.agent.count({ where }),
     ]);
+
+    return res.status(200).json({
+      ok: true,
+      data: agents,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, message: "Server error" });
+  }
+};
+
+const getAllAgentsByCompany = async (req, res) => {
+  try {
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(
+      Math.max(parseInt(req.query.limit, 10) || 20, 1),
+      100,
+    );
+
+    const skip = (page - 1) * limit;
+
+    const where = { company: String(req.params.company) };
+
+    const [agents, total] = await Promise.all([
+      prisma.agent.findMany({
+        where,
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          batchNo: true,
+          center: true,
+          company: true,
+          gender: true, 
+          fullname: true,
+          email: true,
+          phone: true,
+          location: true,
+          avatar: true,
+          uid: true,
+          role: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      prisma.agent.count({ where }),
+    ]);
+
+    res.set({
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+    });
 
     return res.status(200).json({
       ok: true,
@@ -460,7 +436,7 @@ const deleteAgent = async (req, res) => {
     const agent = await prisma.agent.delete({ where: { uid: req.params.uid } });
     if (!agent)
       return res.status(404).json({ ok: false, message: "Agent not found" });
-    res.status(204).send();
+    res.status(200).json({ ok: true, message: "Agent deleted successfully" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Server error" });
@@ -857,4 +833,5 @@ export {
   changeSecurityToken,
   verifySecurityCode,
   getAllAgentsByCenter,
+  getAllAgentsByCompany,
 };

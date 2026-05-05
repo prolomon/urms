@@ -1,19 +1,18 @@
 import { prisma } from "../config/db.js";
 import {
   createWalletSchema,
-  updateWalletBalanceSchema,
-  validateWalletOwnershipSchema,
-  createTransferRecipientSchema,
   initiateTransferSchema,
   resolveBankAccountSchema,
+  getTransactionSchema,
+  verifyTransferSchema,
 } from "../validator/walletValidator.js";
 import {
   createAccount,
-  validateCustomerOwnership,
-  createRecipient,
   initiateTransfer,
   resolveBankAccount,
-} from "../service/paystack.js";
+  getBanks,
+  getTransactions
+} from "../service/wallet.js";
 
 const validationErrorResponse = (res, error) => {
   const errors = error.details.map((detail) => detail.message);
@@ -34,62 +33,14 @@ const createWallet = async (req, res) => {
       return validationErrorResponse(res, error);
     }
 
-    const { customerCode, id, accountType } = value;
+    const { name, bvn, role, id } = value;
 
-    if (!id) {
-      return res.status(400).json({ ok: false, message: "id is required" });
-    }
-
-    let ownerCustomerCode = null;
-
-    if (accountType === "member") {
-      const member = await prisma.member.findUnique({
-        where: { uid: id },
-        select: { uid: true, paystackCustomerCode: true },
-      });
-      if (!member) {
-        return res.status(404).json({ ok: false, message: "Member not found" });
-      }
-      ownerCustomerCode = member.paystackCustomerCode || null;
-    }
-
-    if (accountType === "admin") {
-      const admin = await prisma.admin.findUnique({
-        where: { uid: id },
-        select: { uid: true, paystackCustomerCode: true },
-      });
-      if (!admin) {
-        return res.status(404).json({ ok: false, message: "Admin not found" });
-      }
-      ownerCustomerCode = admin.paystackCustomerCode || null;
-    }
-
-    if (accountType === "agent") {
-      const agent = await prisma.agent.findUnique({
-        where: { uid: id },
-        select: { uid: true, paystackCustomerCode: true },
-      });
-      if (!agent) {
-        return res.status(404).json({ ok: false, message: "Agent not found" });
-      }
-      ownerCustomerCode = agent.paystackCustomerCode || null;
-    }
-
-    const resolvedCustomerCode = ownerCustomerCode || customerCode;
-    if (!resolvedCustomerCode) {
-      return res.status(400).json({
-        ok: false,
-        message: "Paystack customer code is required for wallet creation",
-      });
+    if (!name || !bvn || !role || !id) {
+      return res.status(400).json({ ok: false, message: "All fields are required" });
     }
 
     const existingWallet = await prisma.wallet.findFirst({
-      where:
-        accountType === "member"
-          ? { memberId: id }
-          : accountType === "admin"
-            ? { adminId: id }
-            : { agentId: id },
+      where: { userId: id }
     });
 
     if (existingWallet) {
@@ -99,7 +50,7 @@ const createWallet = async (req, res) => {
       });
     }
 
-    const acc = await createAccount(resolvedCustomerCode);
+    const acc = await createAccount(name, bvn, id);
 
     if (!acc?.status) {
       return res.status(502).json({
@@ -108,58 +59,25 @@ const createWallet = async (req, res) => {
       });
     }
 
-    const accountNo = acc?.data?.account_number;
-    if (!accountNo) {
-      return res.status(502).json({
-        ok: false,
-        message: "Paystack did not return an account number",
-      });
-    }
-
-    const existingByAccountNo = await prisma.wallet.findUnique({
-      where: { accountNo },
-    });
-
-    if (existingByAccountNo) {
-      const belongsToCurrentOwner =
-        (accountType === "member" && existingByAccountNo.memberId === id) ||
-        (accountType === "admin" && existingByAccountNo.adminId === id) ||
-        (accountType === "agent" && existingByAccountNo.agentId === id);
-
-      if (belongsToCurrentOwner) {
-        return res.status(200).json({
-          ok: true,
-          message: "Wallet already exists for this owner",
-          wallet: existingByAccountNo,
-        });
-      }
-
-      return res.status(409).json({
-        ok: false,
-        message:
-          "Generated account number already exists. Please retry wallet creation.",
-      });
-    }
-
     let wallet;
     try {
       wallet = await prisma.wallet.create({
         data: {
-          memberId: accountType === "member" ? id : null,
-          adminId: accountType === "admin" ? id : null,
-          agentId: accountType === "agent" ? id : null,
-          accountNo,
+          userId: id,
+          accountNo: acc?.data?.bankAccountNumber,
+          role: "COMPANY",
           bank: {
-            name: acc?.data?.bank.name,
-            id: acc?.data?.bank.id,
-            code: acc?.data?.bank.code,
+            name: acc?.data?.bankName,
+            id: acc?.data?.accountRef || id,
+            code: 110028,
           },
           balance: 0.0,
-          status: acc?.data?.active ? true : false,
-          accountName: acc?.data?.account_name,
+          status: acc?.data?.expired,
+          accountName: acc?.data?.bankAccountName,
           currency: acc?.data?.currency,
         },
       });
+
     } catch (createErr) {
       if (createErr?.code === "P2002") {
         return res.status(409).json({
@@ -174,6 +92,7 @@ const createWallet = async (req, res) => {
     return res
       .status(201)
       .json({ ok: true, message: "Wallet created successfully", wallet });
+
   } catch (err) {
     console.log(err);
     return res
@@ -182,18 +101,18 @@ const createWallet = async (req, res) => {
   }
 };
 
-const getWalletByMemberId = async (req, res) => {
+const getWalletById = async (req, res) => {
   try {
-    const { memberId } = req.params;
+    const { userId, role } = req.params;
 
-    if (!memberId) {
+    if (!userId || !role) {
       return res
         .status(400)
-        .json({ ok: false, message: "memberId is required", isExist: false });
+        .json({ ok: false, message: "userId, role is required", isExist: false });
     }
 
     const wallet = await prisma.wallet.findFirst({
-      where: { memberId },
+      where: { userId, role },
     });
 
     if (!wallet) {
@@ -204,63 +123,6 @@ const getWalletByMemberId = async (req, res) => {
 
     return res.status(200).json({ ok: true, wallet, isExist: true });
   } catch (err) {
-    return res
-      .status(500)
-      .json({ ok: false, message: err?.message || "Server error" });
-  }
-};
-
-const getWalletByAgentId = async (req, res) => {
-  try {
-    const agentId = req.params?.agentId?.trim();
-
-    if (!agentId) {
-      return res
-        .status(400)
-        .json({ ok: false, message: "agentId is required", isExist: false });
-    }
-
-    const wallet = await prisma.wallet.findFirst({
-      where: { agentId },
-    });
-
-    if (!wallet) {
-      return res
-        .status(404)
-        .json({ ok: false, message: "Wallet not found", isExist: false });
-    }
-
-    return res.status(200).json({ ok: true, wallet, isExist: true });
-  } catch (err) {
-    return res
-      .status(500)
-      .json({ ok: false, message: err?.message || "Server error" });
-  }
-};
-
-const getWalletByAdminId = async (req, res) => {
-  try {
-    const adminId = req.params?.adminId?.trim();
-
-    if (!adminId) {
-      return res
-        .status(400)
-        .json({ ok: false, message: "adminId is required", isExist: false });
-    }
-
-    const wallet = await prisma.wallet.findFirst({
-      where: { adminId },
-    });
-
-    if (!wallet) {
-      return res
-        .status(404)
-        .json({ ok: false, message: "Wallet not found", isExist: false });
-    }
-
-    return res.status(200).json({ ok: true, wallet, isExist: true });
-  } catch (err) {
-    console.log(err);
     return res
       .status(500)
       .json({ ok: false, message: err?.message || "Server error" });
@@ -289,152 +151,11 @@ const getAllWallets = async (req, res) => {
   }
 };
 
-const updateWalletBalanceByAdminId = async (req, res) => {
+const getBanksList = async (req, res) => {
   try {
-    const { adminId } = req.params;
-    const { error, value } = updateWalletBalanceSchema.validate(req.body, {
-      abortEarly: false,
-      stripUnknown: true,
-    });
+    const result = await getBanks();
 
-    if (!adminId) {
-      return res
-        .status(400)
-        .json({ ok: false, message: "adminId is required" });
-    }
-
-    if (error) {
-      return validationErrorResponse(res, error);
-    }
-
-    const { amount, operation } = value;
-
-    const wallet = await prisma.wallet.findFirst({ where: { adminId } });
-    if (!wallet) {
-      return res.status(404).json({ ok: false, message: "Wallet not found" });
-    }
-
-    const nextBalance =
-      operation === "credit"
-        ? wallet.balance + amount
-        : wallet.balance - amount;
-    if (nextBalance < 0) {
-      return res
-        .status(400)
-        .json({ ok: false, message: "Insufficient wallet balance" });
-    }
-
-    const updatedWallet = await prisma.wallet.update({
-      where: { id: wallet.id },
-      data: { balance: nextBalance },
-    });
-
-    return res.status(200).json({
-      ok: true,
-      message: `Wallet ${operation} operation successful`,
-      wallet: updatedWallet,
-    });
-  } catch (err) {
-    return res
-      .status(500)
-      .json({ ok: false, message: err?.message || "Server error" });
-  }
-};
-
-const validateWalletOwnership = async (req, res) => {
-  try {
-    const { error, value } = validateWalletOwnershipSchema.validate(req.body, {
-      abortEarly: false,
-      stripUnknown: true,
-    });
-
-    if (error) {
-      return validationErrorResponse(res, error);
-    }
-
-    const {id} = req.params;
-    if (!id) {
-      return res
-        .status(400)
-        .json({ ok: false, message: "Wallet id is required" });
-    }
-
-    const { bvn, customerCode, type } = value;
-
-    const result = await validateCustomerOwnership(
-      customerCode,
-      bvn,
-      type
-    );
-
-    if (!result?.status) {
-      return res.status(502).json({
-        ok: false,
-        message: result?.message || "Failed to validate wallet ownership",
-        data: result?.data || null,
-      });
-    }
-
-    const wallet = await prisma.wallet.findUnique({ where: { id } });
-
-    if (!wallet) {
-      return res.status(404).json({ ok: false, message: "Wallet not found" });
-    }
-
-   const res = await prisma.wallet.update({
-      where: { id },
-      data: {
-        verify: true,
-        identification: type,
-      },
-    });
-
-    return res.status(200).json({
-      ok: true,
-      message: "Customer identification attached successfully",
-      data: result?.data || null,
-      wallet: res,
-    });
-  } catch (err) {
-    return res
-      .status(500)
-      .json({ ok: false, message: err?.message || "Server error" });
-  }
-};
-
-const createTransferRecipientController = async (req, res) => {
-  try {
-    const { error, value } = createTransferRecipientSchema.validate(req.body, {
-      abortEarly: false,
-      stripUnknown: true,
-    });
-
-    if (error) {
-      return validationErrorResponse(res, error);
-    }
-
-    const { name, accountNumber, bankCode, currency } = value;
-
-    const result = await createRecipient(
-      name,
-      accountNumber,
-      bankCode,
-      currency,
-    );
-
-    if (!result?.status) {
-      return res.status(502).json({
-        ok: false,
-        message: result?.message || "Failed to create transfer recipient",
-        data: result?.data || null,
-      });
-    }
-
-    return res.status(201).json({
-      ok: true,
-      message: "Transfer recipient created successfully",
-      data: result?.data || null,
-    });
+    return res.status(200).json({ ok: true, banks: result });
   } catch (err) {
     return res
       .status(500)
@@ -453,9 +174,9 @@ const initiateTransferController = async (req, res) => {
       return validationErrorResponse(res, error);
     }
 
-    const { amount, recipientCode, reason } = value;
+    const { amount, accountNumber, accountName, bankCode, merchantTxRef, senderName, narration } = value;
 
-    const result = await initiateTransfer(amount, recipientCode, reason);
+    const result = await initiateTransfer(amount, accountNumber, accountName, bankCode, merchantTxRef, senderName, narration);
 
     if (!result?.status) {
       return res.status(502).json({
@@ -471,6 +192,7 @@ const initiateTransferController = async (req, res) => {
       data: result?.data || null,
     });
   } catch (err) {
+    console.log(err);
     return res
       .status(500)
       .json({ ok: false, message: err?.message || "Server error" });
@@ -511,15 +233,94 @@ const resolveBankAccountController = async (req, res) => {
   }
 };
 
+const getTransaction = async (req, res) => {
+  try {
+    const { error, value } = getTransactionSchema.validate(req.body, {
+      abortEarly: false,
+      stripUnknown: true,
+    });
+
+    if (error) {
+      return validationErrorResponse(res, error);
+    }
+
+    const { accountNumber, fromDate, toDate } = value;
+
+    const transactions = await getTransactions(accountNumber, fromDate, toDate);
+
+    if (!transactions || transactions.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        message: "Transaction not found",
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: "Transaction retrieved successfully",
+      transactions,
+    });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ ok: false, message: err?.message || "Server error" });
+  }
+};
+
+const verifyTransfer = async (req, res) => {
+  try {
+    const { error, value } = verifyTransferSchema.validate(req.body, {
+      abortEarly: false,
+      stripUnknown: true,
+    });
+
+    if (error) {
+      return validationErrorResponse(res, error);
+    }
+
+    const { transactionId, reference } = value;
+
+    const transaction = await prisma.transaction.findFirst({
+      where: {
+        OR: [
+          ...(transactionId ? [{ id: transactionId }] : []),
+          ...(reference ? [{ reference }] : []),
+        ],
+      },
+      include: {
+        payment: true,
+      },
+    });
+
+    if (!transaction) {
+      return res.status(404).json({
+        ok: false,
+        message: "Transfer not found",
+      });
+    }
+
+    const isVerified = transaction.status === "SUCCESS";
+
+    return res.status(200).json({
+      ok: true,
+      message: isVerified ? "Transfer verified successfully" : "Transfer verification pending",
+      isVerified,
+      transaction,
+    });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ ok: false, message: err?.message || "Server error" });
+  }
+};
+
 export {
   createWallet,
-  getWalletByMemberId,
-  getWalletByAdminId,
-  getWalletByAgentId,
+  getWalletById,
   getAllWallets,
-  updateWalletBalanceByAdminId,
-  validateWalletOwnership,
-  createTransferRecipientController,
+  getBanksList,
   initiateTransferController,
   resolveBankAccountController,
+  getTransaction,
+  verifyTransfer,
 };

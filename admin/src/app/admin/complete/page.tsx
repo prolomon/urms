@@ -5,17 +5,15 @@ import { useWallet } from "@/context/WalletContext";
 import { Lock, ShieldCheck, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createSecurityToken } from "@/lib/services/admin";
+import { createSecurityToken } from "@/lib/services/company";
 
 export default function CompleteProfileScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { wallet, validateWallet } = useWallet();
+  const { wallet, createWallet, isExist, setUid } = useWallet();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [walletValidated, setWalletValidated] = useState(false);
   const [bvn, setBvn] = useState("");
-  const [verifyingOwnership, setVerifyingOwnership] = useState(false);
   const [securityCode, setSecurityCode] = useState("");
   const [confirmSecurityCode, setConfirmSecurityCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -23,10 +21,13 @@ export default function CompleteProfileScreen() {
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
-    if (wallet?.verify) {
-        router.replace("/admin/wallet");
+
+    setUid(user?.uid || null);
+
+    if (wallet) {
+      router.replace("/partner/wallet");
     }
-  }, [router, wallet?.verify])
+  }, [router, wallet, setUid, user?.uid])
 
   const success = (message: string) => {
     setToast({ type: "success", message });
@@ -54,70 +55,35 @@ export default function CompleteProfileScreen() {
   }, [wallet]);
 
   const handleValidateWallet = () => {
-    if (!validationState.hasWallet) {
-      failed("Wallet not found. Please wait for wallet setup and try again.");
-      return;
-    }
-
-    if (!validationState.hasAccountNumber) {
-      failed("Wallet account number is missing.");
-      return;
-    }
-
-    if (!validationState.isActive) {
-      failed("Wallet is not active yet.");
-      return;
-    }
-
-    success("Wallet validation successful");
-    setWalletValidated(true);
-    if (validationState.isVerified) {
+    if (wallet || isExist) {
       setStep(3);
     } else {
       setStep(2);
     }
   };
 
-  const handleVerifyWalletOwnership = async () => {
-    if (!walletValidated) {
-      failed("Complete step 1 first");
-      return;
-    }
-
-    if (!bvn.trim()) {
-      failed("Enter BVN");
-      return;
-    }
-
-    if (bvn.trim().length < 11) {
-      failed("BVN should be 11 digits");
-      return;
-    }
+  const handleCreateWallet = async () => {
 
     setLoading(true);
 
     try {
-      setVerifyingOwnership(true);
-      const res = await validateWallet(
+      const res = await createWallet(
+        user.center,
         bvn.trim(),
-        user?.paystackCustomerCode || "",
-        idType,
-        wallet?.id || "",
+        "ADMIN",
+        user?.uid || "",
       );
 
       if (res?.ok === false || res?.status === false) {
-        failed(res?.message || "Wallet ownership verification failed");
+        failed(res?.message || "Wallet Creation failed");
         return;
       }
 
-      console.log(res);
-
-      success(res?.message || "Wallet ownership verified");
+      success(res?.message || "Wallet created successfully");
       setStep(3);
     } catch (error: any) {
-      failed(error?.message || "Wallet ownership verification failed");
+      failed(error?.message || "Wallet Creation failed");
     } finally {
-      setVerifyingOwnership(false);
       setLoading(false);
     }
   };
@@ -147,7 +113,7 @@ export default function CompleteProfileScreen() {
       }
 
       success(res.message || "Security code set successfully");
-      router.replace("/admin/wallet");
+      router.replace("/partner/wallet");
     } catch (e: any) {
       console.log(e);
       failed(e?.message || e?.error || "An error occurred while setting security code");
@@ -245,7 +211,7 @@ export default function CompleteProfileScreen() {
                 <div className="flex-1">
                   <h2 className="text-xl font-bold text-slate-900">Verify Wallet Ownership</h2>
                   <p className="mt-1 text-sm text-slate-600">
-                    Enter BVN or NIN and verify with your wallet account details.
+                    Enter BVN to verify with your wallet account details.
                   </p>
                 </div>
               </div>
@@ -264,7 +230,7 @@ export default function CompleteProfileScreen() {
                     <span className="font-semibold">BVN</span>
                   </button>
 
-                  <button
+                  {/* <button
                     type="button"
                     onClick={() => setIdType("NIN")}
                     className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${idType === "NIN" ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
@@ -273,7 +239,7 @@ export default function CompleteProfileScreen() {
                       {idType === "NIN" ? <span className="h-2 w-2 rounded-full bg-emerald-600" /> : null}
                     </span>
                     <span className="font-semibold">NIN</span>
-                  </button>
+                  </button> */}
                 </div>
               </div>
 
@@ -289,6 +255,7 @@ export default function CompleteProfileScreen() {
                     maxLength={11}
                     placeholder={`Enter your ${idType}`}
                     className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -296,10 +263,10 @@ export default function CompleteProfileScreen() {
               <button
                 type="button"
                 className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300 mr-4"
-                onClick={handleVerifyWalletOwnership}
-                disabled={verifyingOwnership}
+                onClick={handleCreateWallet}
+                disabled={loading}
               >
-                {verifyingOwnership ? "Verifying..." : "Verify Wallet"}
+                {loading ? "Creating, Please Wait..." : "Create Wallet"}
               </button>
 
               <button
@@ -333,7 +300,7 @@ export default function CompleteProfileScreen() {
                     value={securityCode}
                     onChange={(e) => setSecurityCode(e.target.value)}
                     inputMode="numeric"
-                    maxLength={6}
+                    maxLength={8}
                     placeholder="Enter code"
                     className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
                   />
@@ -349,7 +316,7 @@ export default function CompleteProfileScreen() {
                     value={confirmSecurityCode}
                     onChange={(e) => setConfirmSecurityCode(e.target.value)}
                     inputMode="numeric"
-                    maxLength={6}
+                    maxLength={8}
                     placeholder="Confirm code"
                     className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
                   />

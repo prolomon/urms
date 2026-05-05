@@ -50,6 +50,9 @@ const createMemberSchema = Joi.object({
     "string.base": "Category must be a string",
     "string.max": "Category must be at most 100 characters long",
   }),
+  company: Joi.string().optional().messages({
+    "string.base": "Company must be a string",
+  }),
   password: Joi.string().optional().default(Joi.ref("phone")).messages({
     "any.required": "Password is required",
   }),
@@ -233,6 +236,19 @@ const changeMemberAgentSchema = Joi.object({
   }),
 });
 
+const changeMemberCompanySchema = Joi.object({
+  userId: Joi.string().trim().required().messages({
+    "string.base": "User ID must be a string",
+    "string.empty": "User ID is required",
+    "any.required": "User ID is required",
+  }),
+  companyId: Joi.string().trim().required().messages({
+    "string.base": "Company ID must be a string",
+    "string.empty": "Company ID is required",
+    "any.required": "Company ID is required",
+  }),
+});
+
 export {
   createMemberSchema,
   updateMemberSchema,
@@ -243,4 +259,5 @@ export {
   billingFrequencySchema,
   pricingActionSchema,
   changeMemberAgentSchema,
+  changeMemberCompanySchema,
 };

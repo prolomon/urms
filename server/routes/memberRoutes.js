@@ -18,6 +18,8 @@ import {
   updateDueBalance,
   pricingAction,
   changeMemberAgent,
+  changeMemberCompany,
+  getMembersByCompanyId,
   getMembersByPricingId
 } from '../controller/memberController.js';
 import {authMiddleware} from '../middleware/auth.js';
@@ -33,7 +35,9 @@ router.post('/verify-security-code/:id', authMiddleware, roleMiddleware(['user',
 router.post('/', createMember);
 router.get('/:id/center', authMiddleware, roleMiddleware(['user', "admin"]), getMembers);
 router.get('/agent/:agentId', authMiddleware, roleMiddleware(['admin']), getMembersByAgentId);
+router.get('/company/:companyId', authMiddleware, roleMiddleware(['admin']), getMembersByCompanyId);
 router.put('/change-agent', authMiddleware, roleMiddleware(['admin']), changeMemberAgent);
+router.put('/change-company', authMiddleware, roleMiddleware(['admin']), changeMemberCompany);
 router.get('/:id', authMiddleware, roleMiddleware(['user', "admin"]), getMember);
 router.put('/:id', authMiddleware, roleMiddleware(['user', "admin"]), updateMember);
 router.patch('/:id/billing-frequency', authMiddleware, roleMiddleware(['user', "admin"]), updateBillingFrequency);

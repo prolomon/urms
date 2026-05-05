@@ -13,10 +13,9 @@ export type Agent = {
   location?: string;
   avatar?: string;
   center?: string;
+  company: string;
   batchNo: string;
   zone?: string;
-  paystackCustomerId?: string;
-  paystackCustomerCode?: string;
   secureToken?: string;
   role?: "AGENT";
   createdAt?: Date;
@@ -27,7 +26,7 @@ export async function getAgents(uid: string): Promise<{ ok: boolean; data?: Agen
   if (!uid) {
     throw new Error("No user ID found");
   }
-  const response = await fetch(`${API_URL}/agent/center/${uid}`, {
+  const response = await fetch(`${API_URL}/agent/company/${uid}`, {
     headers: {...buildHeaders(false)},
   });
   const data = await response.json();
@@ -54,11 +53,13 @@ export async function getAgent(uid: string): Promise<{ ok: boolean; agent?: Agen
 export type CreateAgentPayload = Omit<Agent, "id" | "uid">;
 
 export async function createAgent(payload: CreateAgentPayload): Promise<{ ok: boolean; agent?: Agent; message?: string }> {
+
   const response = await fetch(`${API_URL}/agent`, {
     method: "POST",
     headers: {...buildHeaders(true)},
     body: JSON.stringify(payload),
   });
+
   const data = await response.json();
   if (!response.ok) {
     throw new Error(data.message || "Failed to create agent");
@@ -78,3 +79,19 @@ export async function updateAgent(id: string, payload: Partial<Agent>): Promise<
   }
   return data;
 }
+
+export async function deleteAgent(uid: string): Promise<{ ok: boolean; message: string }> {
+  if (!uid) {
+    throw new Error("No user ID found");
+  }
+  const response = await fetch(`${API_URL}/agent/${uid}`, {
+    headers: {...buildHeaders(false)},
+    method: "DELETE",
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to delete agent");
+  }
+  return data;
+}
+

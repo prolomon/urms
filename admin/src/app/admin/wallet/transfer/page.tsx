@@ -3,13 +3,12 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
     ArrowLeft,
-    CheckCircle2,
     Loader2,
     Wallet,
 } from "lucide-react";
 import withAuth from "@/components/withAuth";
 import banklist from "@/lib/jsons/banklist.json";
-import { verifySecurityCode } from "@/lib/services/admin";
+import { verifySecurityCode } from "@/lib/services/company";
 import { useAuth } from "@/context/AuthContext";
 import { useWallet } from "@/context/WalletContext";
 import { useRouter } from "next/navigation";
@@ -19,8 +18,7 @@ function WalletPage() {
     const [transferLoading, setTransferLoading] = useState(false);
     const [transferError, setTransferError] = useState<string | null>(null);
     const { user } = useAuth();
-    const { wallet, loading, error, setUid, setCustomerCode, resolveBankAccount, createRecipient, initiateTransfer } = useWallet();
-    const [recipientCode, setRecipientCode] = useState<string | null>(null);
+    const { wallet, loading, error, resolveBankAccount, initiateTransfer } = useWallet();
     const [success, setSuccess] = useState(false);
 
     const [formData, setFormData] = useState({
@@ -53,7 +51,6 @@ function WalletPage() {
         }));
 
         if (name === "accountNumber" || name === "bankCode") {
-            setRecipientCode(null);
             if (name === "accountNumber") {
                 setFormData((prev) => ({ ...prev, name: "", accountNumber: value }));
             }
@@ -64,28 +61,28 @@ function WalletPage() {
     };
 
     const fetchBankAccountName = useCallback(async (accountNumber: string, bankCode: string) => {
-        const resolve = await resolveBankAccount(accountNumber, bankCode);
+        try {
+            const resolve = await resolveBankAccount(accountNumber, bankCode);
 
-        if (resolve.ok) {
-            setFormData(prev => ({ ...prev, name: resolve?.data?.account_name || "" }));
-
-            const getRecipient = await createRecipient(resolve.data.account_name, accountNumber, bankCode);
-
-            console.log("Recipient creation response:", getRecipient);
-
-            if (getRecipient.ok) {
-                setRecipientCode(getRecipient.data?.recipient_code || null);
-            } else {
-                setTransferError(getRecipient.message || "Failed to create recipient");
-                setRecipientCode(null);
+            if (resolve?.ok === false) {
+                setTransferError(resolve?.message || "Failed to resolve bank account");
+                return;
             }
 
-            return;
+            // Handle both response formats: { data: { accountName } } and direct { accountName }
+            const accountName = resolve?.data?.accountName || resolve?.accountName || "";
+            if (accountName) {
+                setFormData(prev => ({ ...prev, name: accountName }));
+                setTransferError(null);
+            } else {
+                setTransferError("Account name not found. Please verify the account details.");
+            }
+        } catch (err) {
+            console.error("Error fetching account name:", err);
+            setTransferError("Failed to resolve bank account. Please try again.");
         }
 
-        setTransferError(resolve.message || "Failed to resolve bank account");
-
-    }, [createRecipient, resolveBankAccount]);
+    }, [resolveBankAccount]);
 
     //Automatically get account name
     useEffect(() => {
@@ -99,17 +96,8 @@ function WalletPage() {
         }
 
         fetchBankAccountName(formData.accountNumber, formData.bankCode);
-    }, [fetchBankAccountName, formData.accountNumber, formData.bankCode]);
 
-    useEffect(() => {
-        if (user) {
-            setCustomerCode(user.paystackCustomerCode ?? user.customerCode ?? null);
-            setUid(user.uid);
-        } else {
-            setCustomerCode(null);
-            setUid(null);
-        }
-    }, [setCustomerCode, setUid, user]);
+    }, [fetchBankAccountName, formData.accountNumber, formData.bankCode]);
 
     // This is the function to handle transfer, we can connect this to the payout API later
     const handleTransfer = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -118,7 +106,7 @@ function WalletPage() {
         setSuccess(false);
         setTransferLoading(true);
         try {
-            if (!recipientCode) {
+            if (!formData.name) {
                 setTransferError("Recipient code is not available. Please check the account details.");
                 return;
             }
@@ -137,10 +125,8 @@ function WalletPage() {
                 }
             }
 
-            console.log(formData, recipientCode);
-
-            // Here you would call the initiateTransfer function from your wallet service, passing the amount, recipientCode, and reason from the formData
-            const init = await initiateTransfer(Number(formData.amount), recipientCode, formData.reason);
+            // Here you would call the initiateTransfer function from your wallet service, passing the amount, recipientCode, and reason from the formData 
+            const init = await initiateTransfer(Number(formData.amount), formData.accountNumber, formData.name, formData.bankCode, new Date().toISOString(), user?.name || "", formData.reason);
 
             if (!init.ok) {
                 setTransferError("Failed to initiate transfer. Please try again.");
@@ -148,7 +134,7 @@ function WalletPage() {
             }
 
             setSuccess(true);
-            setFormData((prev) => ({
+            setFormData((prev) => ({ 
                 ...prev,
                 amount: "",
                 reason: "",
@@ -250,7 +236,7 @@ function WalletPage() {
                             placeholder="Will auto-fill after account verification"
                             className="w-full rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100 appearance-none"
                         />
-                        {recipientCode && (
+                        {formData.name && (
                             <p className="mt-1 text-xs text-emerald-700">Recipient verified and ready for transfer.</p>
                         )}
                     </div>

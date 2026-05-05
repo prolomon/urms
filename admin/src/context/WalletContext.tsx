@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { Wallet, getWallet, createWallet, createRecipient, initiateTransfer, resolveBankAccount, validateWallet } from "@/lib/services/wallet";
+import { Wallet, getWallet, createWallet, initiateTransfer, resolveBankAccount, getBanks, getTransactions } from "@/lib/services/wallet";
 
 const walletContext = createContext<any>(null);
 
@@ -19,39 +19,21 @@ export const WalletProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null); 
     const [message, setMessage] = useState<string | null>(null);
-    const [customerCode, setCustomerCode] = useState<string | null>(null);
     const [uid, setUid] = useState<string | null>(null);
 
-    // Get CustomerCode from session storage on initial load
-    useEffect(() => {
-        const adminData = sessionStorage.getItem("amac_admin");
-
-        if (adminData) {
-            const parsedAdmin = JSON.parse(adminData);
-            setCustomerCode(
-                parsedAdmin.paystackCustomerCode ?? parsedAdmin.customerCode ?? null,
-            );
-            setUid(parsedAdmin.uid ?? null);
-        } else {
-            setCustomerCode(null);
-            setUid(null);
-        }
-    }, []);
-
     // Fetch wallet data when customerCode is available
-
     const fetchWallet = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            if (!customerCode || !uid) {
+            if (!uid) {
                 setIsWallet(false);
                 setWallet(null);
-                setMessage("No customer code found for this account.");
+                setMessage("No user ID found for this account.");
                 return;
             }
 
-            const { ok, wallet, message, isExist } = await getWallet(uid, "admin");
+            const { ok, wallet, message, isExist } = await getWallet(uid, "COMPANY");
 
             if (isExist) {
                 if (ok && wallet) {
@@ -62,19 +44,9 @@ export const WalletProvider = ({ children }) => {
                     setWallet(null);
                 }
             } else {
-                await createWallet(customerCode, uid, "admin");
-
-                const created = await getWallet(uid, "admin");
-                if (created.ok && created.wallet) {
-                    setIsWallet(true);
-                    setWallet(created.wallet);
-                    setMessage(created.message || "Wallet created successfully");
-                } else {
                     setIsWallet(false);
                     setWallet(null);
-                    setMessage(created.message || "Wallet could not be created");
-                }
-                return;
+                    setMessage(message || "Wallet could not be created");
             }
 
             setMessage(message || null);
@@ -87,7 +59,7 @@ export const WalletProvider = ({ children }) => {
             setLoading(false);
         }
 
-    }, [customerCode, uid]);
+    }, [uid]);
 
     useEffect(() => {
         fetchWallet();
@@ -105,11 +77,11 @@ export const WalletProvider = ({ children }) => {
         message,
         refresh,
         setUid,
-        setCustomerCode,
-        createRecipient, 
+        createWallet,
         initiateTransfer, 
         resolveBankAccount,
-        validateWallet
+        getTransactions,
+        getBanks
     };
 
     return (
