@@ -152,7 +152,7 @@ export default function EntityDetailsPage({ params }) {
         setWallet(null);
         return;
       }
-      const walletData = await getWallet(customerCode, "member");
+      const walletData = await getWallet(customerCode, "MEMBER");
 
       setIsExist(walletData?.isExist || false);
       if (walletData?.ok) {
