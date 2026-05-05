@@ -131,7 +131,7 @@ export default function AgentDetailPage({ params }) {
         return;
       }
 
-      const walletData = await getWallet(walletOwnerId, "agent");
+      const walletData = await getWallet(walletOwnerId, "AGENT");
       setIsWalletExist(Boolean(walletData?.isExist));
       if (walletData?.ok) {
         setWallet(walletData?.wallet || null);
