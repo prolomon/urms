@@ -390,24 +390,6 @@ const deleteMember = async (req, res) => {
     if (!memberToDelete)
       return res.status(404).json({ error: "Member not found" });
 
-    // Create notification before deleting
-    try {
-      await prisma.notification.create({
-        data: {
-          userId: memberToDelete.uid,
-          title: "Account Deleted",
-          description: "Your account has been deleted.",
-          type: "UPDATE",
-          date: new Date(),
-        },
-      });
-    } catch (notificationError) {
-      console.error(
-        "Failed to create delete notification:",
-        notificationError.message || notificationError,
-      );
-    }
-
     const member = await prisma.member.delete({
       where: { uid: req.params.id },
     });

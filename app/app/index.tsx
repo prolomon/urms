@@ -27,6 +27,7 @@ export default function WelcomeScreen() {
             />
           </View>
         </View>
+
         {/* Welcome Message */}
         <View style={styles.welcomeSection}>
           <Text style={styles.welcomeTitle}>Welcome to the</Text>
@@ -50,22 +51,12 @@ export default function WelcomeScreen() {
               Already a member? Sign In
             </Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.button, styles.secondaryButton]}
-            activeOpacity={0.85}
-            onPress={() => router.push("/preference")}
-          >
-            <Text style={styles.secondaryButtonText}>
-              Not a member? Sign Up
-            </Text>
-          </TouchableOpacity>
         </View>
 
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            © 2026 Karu Revenue Management System
+            © {new Date().getFullYear()} TR3-G Innovation Limited
           </Text>
         </View>
       </View>
@@ -88,7 +79,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    justifyContent: "center",
+    justifyContent: "flex-end",
     paddingHorizontal: 10,
     paddingVertical: 40,
     paddingTop: 60,
@@ -144,8 +135,7 @@ const styles = StyleSheet.create({
     lineHeight: 26,
   },
   buttonContainer: {
-    gap: 16,
-    paddingHorizontal: 8,
+    marginBottom: 40,
   },
   button: {
     paddingVertical: 18,

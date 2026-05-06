@@ -197,7 +197,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const response = await MemberLogin(uid, password);
 
-      console.log('Login Response:', response);
       const normalized = normalizeUser(response.member || {});
 
       await AsyncStorage.setItem(AUTH_MEMBER, JSON.stringify(normalized));
@@ -215,8 +214,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     await AsyncStorage.removeItem(AUTH_MEMBER);
+    await AsyncStorage.removeItem(AUTH_MEMBER_TOKEN);
+    await AsyncStorage.removeItem(AUTH_MEMBER_WALLET);
+    await AsyncStorage.removeItem(AUTH_MEMBER_WALLET_STATE);
     setCurrentUser(null);
-  };
+  }; 
 
   const forgotPassword = async (
     uid: string,

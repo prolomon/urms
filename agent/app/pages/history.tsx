@@ -17,8 +17,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// date filter type removed (not used) to avoid unused type warnings
-
 export default function HistoryScreen() {
 	const router = useRouter();
 	const { currentUser } = useAuth();
@@ -31,6 +29,7 @@ export default function HistoryScreen() {
 			.toISOString()
 			.split("T")[0],
 	);
+
 	const [toDate, setToDate] = useState(new Date().toISOString().split("T")[0]);
 
 	const loadPayments = useCallback(async (from?: string, to?: string) => {
