@@ -1,6 +1,9 @@
 import { API_URL } from "@/config";
+import { AUTH_MEMBER, AUTH_MEMBER_TOKEN, AUTH_MEMBER_WALLET, AUTH_MEMBER_WALLET_STATE } from "@/lib/api"
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { Member } from "@/lib/types";
+import { createSecurityCode, verifySecurityCode, login as MemberLogin, getMember } from "@/lib/services/member";
 
 type Frequency = "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY" | "QUARTERLY";
 
@@ -31,13 +34,13 @@ export type Notification = {
   description: string;
   date: string;
   type:
-    | "UPDATE"
-    | "SUCCESS"
-    | "FAILED"
-    | "PENDING"
-    | "REQUEST"
-    | "REMINDER"
-    | "WELCOME";
+  | "UPDATE"
+  | "SUCCESS"
+  | "FAILED"
+  | "PENDING"
+  | "REQUEST"
+  | "REMINDER"
+  | "WELCOME";
 };
 
 export type Payment = {
@@ -55,21 +58,13 @@ export type Payment = {
 };
 
 type AuthContextValue = {
-  currentUser: User | null;
+  currentUser: Member | null;
   loading: boolean;
-  register: (user: Omit<User, "uid" | "role" | "createdAt">) => Promise<{
-    message: string;
-    ok: boolean;
-  }>;
   login: (
     uid: string,
     password: string,
   ) => Promise<{ ok: boolean; message?: string }>;
   logout: () => Promise<void>;
-  updateProfile: (
-    updates: Partial<User>,
-    token?: string,
-  ) => Promise<{ ok: boolean; message?: string }>;
   forgotPassword: (
     uid: string,
     password: string,
@@ -97,6 +92,17 @@ type AuthContextValue = {
   setDueBalance: (
     dueBalance?: number,
   ) => Promise<{ ok: boolean; message?: string }>;
+  token: string | undefined;
+  createCode: (
+    secureToken: string,
+    confirmSecureToken: string,
+  ) => Promise<{ ok: boolean; message?: string }>;
+  uid?: string;
+  wallet: any;
+  verifyCode: (
+    secureToken: string,
+  ) => Promise<{ ok: boolean; message?: string }>;
+  refreshUser: () => Promise<void>;
 };
 
 export type BusinessType = {
@@ -111,38 +117,72 @@ const AUTH_CURRENT_KEY = "miRvAy3HC/25KEoA";
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-function normalizeUser(user: any): User {
+function normalizeUser(user: any): Member {
   return {
-    uid: user?.uid ?? "",
-    fullname: user?.fullname ?? "",
-    email: user?.email ?? "",
-    phone: user?.phone ?? "",
-    businessType: user?.businessType ?? "",
-    businessName: user?.businessName ?? "",
-    billingFrequency: user?.billingFrequency ?? "MONTHLY",
-    password: user?.password ?? "",
-    location: user?.location ?? "",
-    agent: user?.agent ?? "",
-    avatar: user?.avatar,
-    role: user?.role ?? "USER",
-    createdAt: user?.createdAt,
-    type: user?.type ?? "INDIVIDUAL",
-    balance: user?.balance || 0,
-    due: user?.due || 0,
-    dueBalance: user?.dueBalance || 0,
+    uid: user.uid,
+    fullname: user.fullname,
+    businessName: user.businessName,
+    center: user.center,
+    email: user.email,
+    phone: user.phone,
+    type: user.type,
+    category: user.category,
+    company: user.company,
+    billingFrequency: user.billingFrequency,
+    password: user.password,
+    location: {
+      state: user.location.state,
+      city: user.location.city,
+      address: user.location.address,
+      zipcode: user.location.zipcode,
+      nearestBusStop: user.uid,
+    },
+    status: user.status,
+    avatar: user.avatar,
+    pricing: user.pricing,
+    role: user.role,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+    agent: user.agent,
   };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<Member | null>(null);
   const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState<string | undefined>(undefined);
+  const [uid, setUid] = useState<string | undefined>(undefined);
+  const [wallet, setWallet] = useState<any>(null);
+
+  const refreshUser = async () => {
+    try {
+
+      const res = await getMember(currentUser?.uid || "", token || "");
+      const updatedUser = res?.member || res?.data || res;
+      const normalized = normalizeUser(updatedUser);
+      await AsyncStorage.setItem(AUTH_MEMBER, JSON.stringify(normalized));
+      setCurrentUser(normalized);
+
+    } catch (e) {
+      // ignore
+    }
+  };
 
   useEffect(() => {
     (async () => {
       try {
-        const cur = await AsyncStorage.getItem(AUTH_CURRENT_KEY);
+        const cur = await AsyncStorage.getItem(AUTH_MEMBER);
         if (cur) {
           setCurrentUser(normalizeUser(JSON.parse(cur)));
+        }
+
+        const wal = await AsyncStorage.getItem(AUTH_MEMBER_WALLET);
+        if (wal) {
+          setWallet(JSON.parse(wal));
+        }
+        const tok = await AsyncStorage.getItem(AUTH_MEMBER_TOKEN);
+        if (tok) {
+          setToken(tok);
         }
       } catch (e) {
         // ignore
@@ -152,92 +192,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  const register = async (user: Omit<User, "uid" | "role" | "createdAt">) => {
-    try {
-      const response = await fetch(`${API_URL}/api/member`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(user),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        return { ok: false, message: error.message || "Registration failed" };
-      }
-
-      const newUser: User = await response.json();
-      const normalized = normalizeUser(newUser);
-      await AsyncStorage.setItem(AUTH_CURRENT_KEY, JSON.stringify(normalized));
-      setCurrentUser(normalized);
-      return {
-        ok: true,
-        message: "Registration successful",
-      };
-    } catch (e: any) {
-      return { ok: false, message: e?.message || "Registration failed" };
-    }
-  };
-
   const login = async (uid: string, password: string) => {
     try {
-      const response = await fetch(`${API_URL}/api/member/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email: uid, password }),
-      });
 
-      if (!response.ok) {
-        const error = await response.json();
-        return { ok: false, message: error.message };
-      }
+      const response = await MemberLogin(uid, password);
 
-      const user = await response.json();
-      const normalized = normalizeUser(user.member);
-      await AsyncStorage.setItem(AUTH_CURRENT_KEY, JSON.stringify(normalized));
+      console.log('Login Response:', response);
+      const normalized = normalizeUser(response.member || {});
+
+      await AsyncStorage.setItem(AUTH_MEMBER, JSON.stringify(normalized));
+      await AsyncStorage.setItem(AUTH_MEMBER_TOKEN, response.token || "");
+      setToken(response.token || "");
+
       setCurrentUser(normalized);
-      return { ok: true };
-    } catch (e) {
-      return { ok: false, error: "Login failed" };
+
+      return { ok: true, message: response.message || "Login successful" };
+
+    } catch (e: any) {
+      return { ok: false, error: e?.message || e?.error || "Login failed" };
     }
   };
 
   const logout = async () => {
-    await AsyncStorage.removeItem(AUTH_CURRENT_KEY);
+    await AsyncStorage.removeItem(AUTH_MEMBER);
     setCurrentUser(null);
-  };
-
-  const updateProfile = async (updates: Partial<User>, token?: string) => {
-    try {
-      if (!currentUser) return { ok: false, message: "Not authenticated" };
-      if (!currentUser.uid) return { ok: false, message: "User ID not found" };
-
-      const response = await fetch(`${API_URL}/api/member/${currentUser.uid}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token || currentUser.uid || ""}`,
-          "x-user-id": currentUser.uid,
-        },
-        body: JSON.stringify(updates),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        return { ok: false, message: error.message || "Update failed" };
-      }
-
-      const updatedUser = await response.json();
-      const normalized = normalizeUser(updatedUser?.member || {});
-      await AsyncStorage.setItem(AUTH_CURRENT_KEY, JSON.stringify(normalized));
-      setCurrentUser(normalized);
-      return { ok: true, message: "Profile updated successfully" };
-    } catch (e: any) {
-      return { ok: false, message: e?.message || "Update failed" };
-    }
   };
 
   const forgotPassword = async (
@@ -419,7 +397,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           reference: reference,
           userId: currentUser.uid,
           businessName: currentUser.businessName || "",
-          businessType: currentUser.businessType || "MEDIUM",
+          // businessType: currentUser.businessType || "MEDIUM",
           frequency: currentUser.billingFrequency || "MONTHLY",
           amount: amount,
           payment: payment,
@@ -501,7 +479,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             Authorization: `Bearer ${currentUser.uid || ""}`,
             "x-user-id": currentUser.uid,
           },
-          body: JSON.stringify({ balance: newBalance}),
+          body: JSON.stringify({ balance: newBalance }),
         },
       );
 
@@ -534,7 +512,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             Authorization: `Bearer ${currentUser.uid || ""}`,
             "x-user-id": currentUser.uid,
           },
-          body: JSON.stringify({dueBalance: dueBalance }),
+          body: JSON.stringify({ dueBalance: dueBalance }),
         },
       );
 
@@ -554,13 +532,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const createCode = async (secureToken: string, confirmSecureToken: string,) => {
+
+    try {
+
+      const response = await createSecurityCode(currentUser?.uid || "", secureToken, confirmSecureToken, token as string);
+
+      if (!response.ok) {
+        return { ok: false, message: response.message || "Security code creation failed" };
+      }
+
+      return { ok: true, message: response.message || "Security code created successfully" };
+
+    } catch (error: any) {
+      return { ok: false, message: "An error occurred while creating the security code" };
+    }
+
+  }
+
+  const verifyCode = async (secureToken: string) => {
+
+    try {
+
+      const response = await verifySecurityCode(currentUser?.uid || "", secureToken, token as string);
+
+      if (!response.ok) {
+        return { ok: false, message: response.message || "Security code verification failed" };
+      }
+
+      return { ok: true, message: response.message || "Security code verified successfully" };
+
+    } catch (error: any) {
+      return { ok: false, message: "An error occurred while verifying the security code" };
+    }
+
+  }
+
   const value: AuthContextValue = {
     currentUser,
     loading,
-    register,
     login,
     logout,
-    updateProfile,
     forgotPassword,
     billing,
     notifications,
@@ -571,6 +583,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     getBusiness,
     setBalance,
     setDueBalance,
+    token,
+    createCode,
+    uid,
+    wallet,
+    verifyCode,
+    refreshUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

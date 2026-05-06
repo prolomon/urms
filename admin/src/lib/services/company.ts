@@ -15,7 +15,7 @@ export type Company = {
   role?: "COMPANY";
   createdAt?: Date;
   updatedAt?: Date;
-}
+} 
 
 export async function getCompanies(uid: string): Promise<{ ok: boolean; data?: Company[]; message?: string, meta: { total: number; limit: number; page: number; totalPages: number } }> {
   if (!uid) {

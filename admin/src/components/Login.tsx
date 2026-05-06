@@ -8,7 +8,6 @@ import { usePathname } from "next/navigation";
 
 export default function Login() {
     const pathname = usePathname();
-    console.log("Current pathname:", pathname);
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");

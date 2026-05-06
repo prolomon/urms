@@ -15,8 +15,16 @@ export default function LineChartCard({ data, title }) {
         ? Math.max(...data.map(item => item.value || 0))
         : 100;
     
-    const yAxisMax = Math.ceil(maxValue);
-    const yAxisInterval = Math.ceil(yAxisMax / 4);
+    const yAxisMax = Math.max(1, Math.ceil(maxValue));
+    const yAxisTicks = Array.from(
+        new Set([
+            0,
+            Math.ceil(yAxisMax * 0.25),
+            Math.ceil(yAxisMax * 0.5),
+            Math.ceil(yAxisMax * 0.75),
+            yAxisMax,
+        ])
+    ).sort((a, b) => a - b);
     
     return (
         <div className="bg-white rounded-2xl shadow-md p-3">
@@ -32,7 +40,7 @@ export default function LineChartCard({ data, title }) {
                             tick={{ fill: '#94a3b8', fontSize: 12 }} 
                             dx={-10} 
                             domain={[0, yAxisMax]}
-                            ticks={[0, yAxisInterval, yAxisInterval * 2, yAxisInterval * 3, yAxisMax]}
+                            ticks={yAxisTicks}
                             tickFormatter={(val) => currencyFormatter.format(val)} 
                         />
                         <Tooltip

@@ -1,7 +1,6 @@
 import { formatCurrency } from "@/config";
 import { useAuth } from "@/hooks/use-auth";
 import { useWallet } from "@/hooks/use-wallet";
-import { getTransactions } from "@/lib/services/transaction";
 import { Transaction } from "@/lib/types";
 import * as Clipboard from "expo-clipboard";
 import { RelativePathString, useRouter } from "expo-router";
@@ -35,17 +34,17 @@ export default function Dashboard() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const { wallet, toggleHide, hide, refresh } = useWallet();
+  const { wallet, toggleHide, hide, refresh, getTransactions } = useWallet();
   const walletBalance = Number(wallet?.balance || 0);
   const walletAccountNo = wallet?.accountNo || 0;
   const walletBank = wallet?.bank?.name || "-";
 
   const loadVerifyWallet = useCallback(async () => {
-    if (wallet?.verify === false) {
+    if (!wallet) {
       router.push("/pages/complete" as RelativePathString);
       return;
     }
-  }, [router, wallet?.verify]);
+  }, [router, wallet]);
 
   useEffect(() => {
     loadVerifyWallet();
@@ -61,13 +60,15 @@ export default function Dashboard() {
   const loadTransactions = useCallback(async () => {
     try {
       const userId = currentUser?.id || currentUser?.uid;
-      if (!userId) {
+      if (!userId || !wallet) {
         setTransactions([]);
         return;
       }
 
       setHistoryLoading(true);
-      const data = await getTransactions(userId);
+      const startDate = new Date(new Date().getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      const endDate = new Date().toISOString().split("T")[0];
+      const data = await getTransactions(wallet?.accountNo || "", startDate, endDate, wallet?.token || "");
       const sorted = [...(data?.transactions || [])].sort((a, b) => {
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
@@ -78,7 +79,7 @@ export default function Dashboard() {
     } finally {
       setHistoryLoading(false);
     }
-  }, [currentUser?.id, currentUser?.uid]);
+  }, [currentUser?.id, currentUser?.uid, getTransactions, wallet]);
 
   useEffect(() => {
     loadTransactions();
@@ -235,10 +236,10 @@ export default function Dashboard() {
                   onPress={() => router.push(`/pages/transaction/${tx.id}` as RelativePathString)}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.historyTitle}>{tx.event || "Transaction"}</Text>
-                    <Text style={styles.historySub}>{tx.reference}</Text>
+                    <Text style={styles.historyTitle}>{tx.type || tx.transactionCategory || "Transaction"}</Text>
+                    <Text style={styles.historySub}>{tx.narration || tx.source}</Text>
                     <Text style={styles.historyDate}>
-                      {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : "-"}
+                      {tx.timeCreated ? new Date(tx.timeCreated).toLocaleDateString() : "-"}
                     </Text>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>

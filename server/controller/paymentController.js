@@ -1,11 +1,99 @@
 import { prisma } from "../config/db.js";
-import { createPaymentSchema } from '../validator/paymentValidator.js';
+import {
+  createPaymentSchema,
+  updatePaymentScheduleSchema,
+  verifyPaymentSchema,
+} from '../validator/paymentValidator.js';
+import { customAlphabet } from 'nanoid';
+
+const paymentReferenceSuffix = customAlphabet('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ', 8);
+
+const generatePaymentReference = () => {
+  return `PAY-REF|${new Date().toISOString()}-${paymentReferenceSuffix()}`;
+};
+
+const normalizeSessions = (value) => {
+  if (!value) {
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.filter(Boolean).map((item) => String(item));
+  }
+
+  return [String(value)].filter(Boolean);
+};
+
+const getNextDueDate = (dueDate, frequency) => {
+  const nextDueDate = new Date(dueDate || new Date());
+  const normalizedFrequency = String(frequency || 'MONTHLY').toUpperCase();
+
+  if (normalizedFrequency === 'YEARLY') {
+    nextDueDate.setFullYear(nextDueDate.getFullYear() + 1);
+  } else if (normalizedFrequency === 'QUARTERLY') {
+    nextDueDate.setMonth(nextDueDate.getMonth() + 3);
+  } else {
+    nextDueDate.setMonth(nextDueDate.getMonth() + 1);
+  }
+
+  return nextDueDate;
+};
+
+const createPaymentRecord = async (data, client = prisma) => {
+  return client.payment.create({
+    data: {
+      reference: data.reference || generatePaymentReference(),
+      userId: data.userId,
+      frequency: data.frequency || 'MONTHLY',
+      sessions: normalizeSessions(data.sessions),
+      debt: Number(data.debt ?? 0),
+      due: data.due ? new Date(data.due) : new Date(),
+      amount: Number(data.amount),
+      payment: String(data.payment),
+      status: data.status || 'PENDING',
+      isVerify: Boolean(data.isVerify),
+    },
+  });
+};
+
+const createRecurringPaymentForPayment = async (payment, client = prisma) => {
+  const nextDueDate = getNextDueDate(payment.due, payment.frequency);
+  const existingNextPayment = await client.payment.findFirst({
+    where: {
+      userId: payment.userId,
+      payment: payment.payment,
+      due: nextDueDate,
+    },
+    select: { id: true },
+  });
+
+  if (existingNextPayment) {
+    return { created: false, payment: null };
+  }
+
+  const nextPayment = await client.payment.create({
+    data: {
+      reference: generatePaymentReference(),
+      userId: payment.userId,
+      frequency: payment.frequency,
+      sessions: [],
+      debt: Number(payment.debt ?? 0),
+      due: nextDueDate,
+      amount: Number(payment.amount),
+      payment: payment.payment,
+      status: 'PENDING',
+      isVerify: false,
+    },
+  });
+
+  return { created: true, payment: nextPayment };
+};
 
 const createPayment = async (req, res) => {
   try {
     const { error, value } = createPaymentSchema.validate(req.body, { abortEarly: false });
     if (error) {
-      const errors = error.details.map(detail => detail.message);
+      const errors = error.details.map((detail) => detail.message);
       return res.status(400).json({
         ok: false,
         message: errors[0],
@@ -13,14 +101,12 @@ const createPayment = async (req, res) => {
       });
     }
 
-    const payment = await prisma.payment.create({
-      data: value,
-    });
+    const payment = await createPaymentRecord(value);
 
     try {
       const notificationType = payment.status === 'SUCCESS' ? 'SUCCESS' : 'PENDING';
       const notificationTitle = payment.status === 'SUCCESS' ? 'Payment Successful' : 'Payment Pending';
-      const notificationDescription = payment.status === 'SUCCESS' 
+      const notificationDescription = payment.status === 'SUCCESS'
         ? `Your payment of ${payment.amount} has been processed successfully.`
         : `Your payment of ${payment.amount} is pending approval.`;
 
@@ -119,45 +205,126 @@ const getAllPayments = async (req, res) => {
 const verifyPayment = async (req, res) => {
   try {
     const { id } = req.params;
+    const { error, value } = verifyPaymentSchema.validate(req.body, { abortEarly: false });
+
+    if (error) {
+      const errors = error.details.map((detail) => detail.message);
+      return res.status(400).json({
+        ok: false,
+        message: errors[0],
+        errors,
+      });
+    }
 
     if (!id) {
       return res.status(400).json({ ok: false, message: 'Payment reference is required' });
     }
 
-    // Update payment to set isVerify to true
-    const payment = await prisma.payment.update({
+    const payment = await prisma.payment.findUnique({
       where: { reference: id },
-      data: { isVerify: true },
+    });
+
+    if (!payment) {
+      return res.status(404).json({ ok: false, message: 'Payment not found' });
+    }
+
+    const incomingSessions = normalizeSessions(value.session ?? value.sessions);
+    const updatedSessions = Array.from(new Set([...(payment.sessions || []), ...incomingSessions]));
+    const amountPaid = Number(value.amountPaid ?? payment.amount);
+    const currentDebt = Number(payment.debt ?? 0);
+
+    let remainingPayment = Math.max(amountPaid, 0);
+    let updatedDebt = currentDebt;
+
+    if (updatedDebt > 0) {
+      if (remainingPayment >= updatedDebt) {
+        remainingPayment -= updatedDebt;
+        updatedDebt = 0;
+      } else {
+        updatedDebt -= remainingPayment;
+        remainingPayment = 0;
+      }
+    }
+
+    const outstandingForCurrentCycle = Math.max(Number(payment.amount) - remainingPayment, 0);
+    updatedDebt += outstandingForCurrentCycle;
+    const fullyPaid = updatedDebt <= 0;
+
+    const updatedPayment = await prisma.payment.update({
+      where: { reference: id },
+      data: {
+        isVerify: true,
+        debt: updatedDebt,
+        status: fullyPaid ? 'SUCCESS' : 'PENDING',
+        sessions: updatedSessions,
+      },
       include: { member: true },
     });
 
-    // Notify user
-    if (payment.userId) {
+    if (updatedPayment.userId) {
       await prisma.notification.create({
         data: {
-          userId: payment.userId,
-          title: 'Payment Verified',
-          description: `Your payment of ${payment.amount} has been verified successfully.`,
-          type: 'SUCCESS',
+          userId: updatedPayment.userId,
+          title: fullyPaid ? 'Payment Verified' : 'Payment Partially Verified',
+          description: fullyPaid
+            ? `Your payment of ${amountPaid} has been verified successfully.`
+            : `Your payment of ${amountPaid} has been verified. Remaining debt: ${updatedDebt}.`,
+          type: fullyPaid ? 'SUCCESS' : 'PENDING',
           date: new Date(),
         },
       });
     }
 
-    // Notify agent
-    if (payment.agentId) {
-      await prisma.notification.create({
-        data: {
-          userId: payment.agentId,
-          title: 'Payment Verification Success',
-          description: `A payment of ${payment.amount} for your member has been verified successfully.`,
-          type: 'SUCCESS',
-          date: new Date(),
-        },
+    return res.status(200).json({
+      ok: true,
+      message: fullyPaid ? 'Payment verified successfully' : 'Payment verified with remaining debt',
+      payment: updatedPayment,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, message: err?.message || 'Server error' });
+  }
+};
+
+const updatePaymentSchedule = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { error, value } = updatePaymentScheduleSchema.validate(req.body, { abortEarly: false });
+
+    if (error) {
+      const errors = error.details.map((detail) => detail.message);
+      return res.status(400).json({
+        ok: false,
+        message: errors[0],
+        errors,
       });
     }
 
-    return res.status(200).json({ ok: true, message: 'Payment verified successfully', payment });
+    if (!id) {
+      return res.status(400).json({ ok: false, message: 'Payment id is required' });
+    }
+
+    const payment = await prisma.payment.findUnique({
+      where: { id },
+    });
+
+    if (!payment) {
+      return res.status(404).json({ ok: false, message: 'Payment not found' });
+    }
+
+    const updatedPayment = await prisma.payment.update({
+      where: { id },
+      data: {
+        frequency: value.frequency,
+        amount: value.amount,
+        due: value.due,
+      },
+    });
+
+    return res.status(200).json({
+      ok: true,
+      message: 'Payment schedule updated successfully',
+      payment: updatedPayment,
+    });
   } catch (err) {
     return res.status(500).json({ ok: false, message: err?.message || 'Server error' });
   }
@@ -166,7 +333,12 @@ const verifyPayment = async (req, res) => {
 export {
   createPayment,
   getPaymentsByUserId,
-  getPaymentByReference,  
+  getPaymentByReference,
   getAllPayments,
   verifyPayment,
+  updatePaymentSchedule,
+  createPaymentRecord,
+  createRecurringPaymentForPayment,
+  generatePaymentReference,
+  getNextDueDate,
 };

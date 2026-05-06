@@ -24,8 +24,6 @@ export type Member = {
   };
   status?: boolean;
   avatar?: string;
-  paystackCustomerId?: string;
-  paystackCustomerCode?: string;
   secureToken?: string;
   pricing?: string[];
   role?: "USER" | "ADMIN";

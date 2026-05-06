@@ -111,6 +111,8 @@ export default function Agents() {
         company: user?.uid || "",
       };
 
+      console.log("Creating agent with payload:", payload);
+
       const res = await createAgent(payload);
 
       if (!res) {
@@ -131,7 +133,7 @@ export default function Agents() {
       });
       setStatus({ type: "success", msg: "Agent created successfully" });
       if (res?.agent?.uid) {
-        router.push(`/admin/agents/${res.agent.uid}`);
+        router.push(`/partner/agents/${res.agent.uid}`);
       }
     } catch (e) {
       console.error(e);
@@ -337,7 +339,7 @@ export default function Agents() {
                       <div>
                         <h4 className="text-base font-semibold text-slate-900">
                           <Link
-                            href={`/admin/agents/${agent.uid || agent.id}`}
+                            href={`/partner/agents/${agent.uid || agent.id}`}
                             className="text-slate-900 transition-colors hover:text-emerald-600"
                           >
                             {agent.fullname || agent.name}

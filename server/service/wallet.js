@@ -291,6 +291,8 @@ export const resolveBankAccount = async (accountNumber, bankCode) => {
 
         const data = await response.json();
 
+        console.log('Nomba resolveBankAccount response', { data });
+
         if (!response.ok || !data?.status) {
             return {
                 status: false,

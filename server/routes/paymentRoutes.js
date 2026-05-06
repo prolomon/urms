@@ -1,5 +1,5 @@
 import express from 'express';
-import { createPayment, getPaymentsByUserId, getPaymentByReference, getAllPayments, verifyPayment } from '../controller/paymentController.js';
+import { createPayment, getPaymentsByUserId, getPaymentByReference, getAllPayments, verifyPayment, updatePaymentSchedule } from '../controller/paymentController.js';
 import {authMiddleware} from '../middleware/auth.js';
 import {roleMiddleware} from '../middleware/role.js';
 
@@ -15,5 +15,7 @@ router.get('/reference/:reference', authMiddleware, roleMiddleware(['user', "adm
 
 router.put('/verify/:id', authMiddleware, roleMiddleware(['admin']), verifyPayment);
 
+router.put('/schedule/:id', authMiddleware, roleMiddleware(['admin']), updatePaymentSchedule);
+
 export {router as paymentRouter};
- 
+  

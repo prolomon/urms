@@ -1,10 +1,10 @@
-import { BusinessType, useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { LinearGradient } from "expo-linear-gradient";
 import { RelativePathString, useRouter } from "expo-router";
-import { ArrowLeft, Eye, EyeOff } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { Eye, EyeOff } from "lucide-react-native";
+import { useState } from "react";
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -13,102 +13,40 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Profile() {
   const router = useRouter();
-  const { currentUser, updateProfile, logout, forgotPassword, getBusiness } =
-    useAuth();
+  const { currentUser, logout, forgotPassword } = useAuth();
   const { success, failed } = useToast();
   const name = currentUser?.fullname ?? "Johnson's Electronics";
   const entityId = currentUser?.uid ?? "AMC-12345678";
   const email = currentUser?.email ?? "you@domain.com";
   const phone = currentUser?.phone ?? "";
-  const location = currentUser?.location ?? "";
-  const businessType = currentUser?.businessType;
+  const locationObj = currentUser?.location;
+  const location = locationObj
+    ? typeof locationObj === "string"
+      ? locationObj
+      : [locationObj.address, locationObj.city, locationObj.state, locationObj.zipcode]
+          .filter(Boolean)
+          .join(", ")
+    : "";
+  const businessType = currentUser?.type;
   const businessName = currentUser?.businessName ?? "AMAC Revenue";
   const initial = name ? name.charAt(0).toUpperCase() : "J";
 
-  const [editVisible, setEditVisible] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [pricing, setPricing] = useState<BusinessType[]>([]);
-  const [loadingPricing, setLoadingPricing] = useState(false);
-
-  const [editName, setEditName] = useState(name);
-  const [editEmail, setEditEmail] = useState(email);
-  const [editPhone, setEditPhone] = useState(phone);
-  const [editLocation, setEditLocation] = useState(location ?? "");
-  const [editBusinessType, setEditBusinessType] = useState<string>(
-    currentUser?.businessType ?? "",
-  );
-  const [editBusinessName, setEditBusinessName] = useState(businessName);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
-  const businessTypeLabel = (type?: string) => {
-    const found = pricing.find((p) => p.id === type);
-    if (found)
-      return `${found.title} (${Number(found.price).toLocaleString("en-NG", {
-        style: "currency",
-        currency: "NGN",
-      })})`;
-    return type || "Unknown";
-  };
-
-  useEffect(() => {
-    fetchPricing();
-  }, []);
-
-  const fetchPricing = async () => {
-    try {
-      setLoadingPricing(true);
-      const response = await getBusiness();
-      if (response && Array.isArray(response)) {
-        setPricing(response);
-      }
-    } catch (error) {
-      failed("Failed to load pricing");
-    } finally {
-      setLoadingPricing(false);
-    }
-  };
-
-  const openEdit = () => {
-    setEditName(name);
-    setEditEmail(email);
-    setEditPhone(phone);
-    setEditLocation(location ?? "");
-    setEditBusinessType(currentUser?.businessType ?? "MEDIUM");
-    setEditVisible(true);
-  };
 
   const openPasswordModal = () => {
     setNewPassword("");
     setConfirmPassword("");
     setPasswordVisible(true);
-  };
-
-  const handleSaveProfile = async () => {
-    if (!editName.trim()) return failed("Name is required");
-    const updates = {
-      fullname: editName.trim(),
-      email: editEmail.trim(),
-      phone: editPhone.trim(),
-      location: editLocation.trim(),
-      businessType: editBusinessType,
-      businessName:
-        currentUser?.type === "INDIVIDUAL"
-          ? editName.trim()
-          : editBusinessName.trim(),
-    };
-    const res = await updateProfile(updates, currentUser?.uid);
-    if (!res.ok) return failed(res.message ?? "Could not update profile");
-    success("Profile updated successfully");
-    setEditVisible(false);
   };
 
   const handleForgotPassword = async () => {
@@ -123,317 +61,233 @@ export default function Profile() {
     setPasswordVisible(false);
   };
 
+  const details: { label: string; value: string }[] = [
+    { label: "Full name", value: currentUser?.fullname || "-" },
+    { label: "User ID", value: currentUser?.uid || "-" },
+    { label: "Email", value: currentUser?.email || "-" },
+    { label: "Phone", value: currentUser?.phone || "-" },
+    { label: "Business Name", value: currentUser?.businessName || "-" },
+    { label: "Type", value: currentUser?.type || "-" },
+    { label: "Category", value: currentUser?.category || "-" },
+    { label: "Center", value: currentUser?.center || "-" },
+    { label: "Agent", value: currentUser?.agent || "-" },
+    { label: "Status", value: currentUser?.status ? "Active" : "Inactive" },
+    { label: "Created", value: currentUser?.createdAt ? String(currentUser.createdAt) : "-" },
+    { label: "Updated", value: currentUser?.updatedAt ? String(currentUser.updatedAt) : "-" },
+    { label: "Location", value: location || "-" },
+  ];
+
   return (
     <SafeAreaView style={styles.safe}>
+      <LinearGradient
+        colors={["rgba(14,163,96,0.18)", "rgba(14,163,96,0.0)"]}
+        start={{ x: 0.2, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.bgGradient}
+        pointerEvents="none"
+      />
+
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
       >
-        <ScrollView
-          style={styles.safe}
-          contentContainerStyle={styles.container}
-        >
+        <ScrollView style={styles.safe} contentContainerStyle={styles.container}>
           <View style={styles.header}>
-            <View style={styles.headerRow}>
-              <TouchableOpacity
-                style={styles.back}
-                activeOpacity={0.7}
-                onPress={() => router.back()}
-              >
-                <ArrowLeft color="#000" />
-              </TouchableOpacity>
-              <Text style={[styles.headerTitle, { color: "#000" }]}>
-                Entity Profile
-              </Text>
-              <View style={{ width: 32 }} />
-            </View>
-          </View>
-
-          <View style={styles.avatarWrap}>
-            <View style={styles.avatarCircle}>
+            <View style={styles.logoBox}>
               <Text style={styles.avatarInitial}>{initial}</Text>
             </View>
           </View>
 
-          <View style={styles.identityWrap}>
-            <Text style={styles.entityName}>{name}</Text>
-            <Text style={styles.entityId}>{entityId}</Text>
+          <View style={styles.welcomeSection}>
+            <Text style={styles.welcomeTitle}>Profile</Text>
+            <Text style={styles.welcomeSubtitle}>{name}</Text>
           </View>
 
-          {(currentUser?.type ?? "") !== "INDIVIDUAL" && (
-            <View style={styles.infoCard}>
-              <Text style={styles.infoLabel}>Business Name</Text>
-              <Text style={styles.infoValue}>{businessName}</Text>
-            </View>
-          )}
-
-          <View style={styles.infoCard}>
-            <Text style={styles.infoLabel}>Category</Text>
-            <Text style={styles.infoValue}>
-              {businessTypeLabel(businessType)}
-            </Text>
-          </View>
-
-          <View style={styles.infoCard}>
-            <Text style={styles.infoLabel}>Location</Text>
-            <Text style={styles.infoValue}>{location}</Text>
-          </View>
-
-          <View style={styles.infoCard}>
-            <Text style={styles.infoLabel}>Email</Text>
-            <Text style={styles.infoValue}>{email}</Text>
-          </View>
-
-          <View style={styles.infoCard}>
-            <Text style={styles.infoLabel}>Phone</Text>
-            <Text style={styles.infoValue}>{phone}</Text>
-          </View>
-
-          <View style={[styles.infoCard, { gap: 10 }]}>
-            <Text style={styles.infoLabel}>Actions</Text>
-            <TouchableOpacity
-              style={styles.primaryBtn}
-              activeOpacity={0.85}
-              onPress={openEdit}
-            >
-              <Text style={styles.primaryText}>Edit Profile</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.secondaryBtn}
-              activeOpacity={0.85}
-              onPress={openPasswordModal}
-            >
-              <Text style={styles.secondaryText}>Change Password</Text>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            style={[
-              styles.primaryBtn,
-              { margin: 14, backgroundColor: "#e94b4b" },
-            ]}
-            activeOpacity={0.85}
-            onPress={async () => {
-              try {
-                await logout();
-                router.replace("login" as RelativePathString);
-                success("Logged out successfully");
-              } catch (_error: any) {
-                failed("Logout failed");
-              }
-            }}
-          >
-            <Text style={styles.primaryText}>Logout</Text>
-          </TouchableOpacity>
-        </ScrollView>
-
-        {/* update user information section */}
-        <Modal transparent visible={editVisible} animationType="slide">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Edit Profile</Text>
-              <ScrollView>
-                <Text style={styles.label}>Full name</Text>
-                <TextInput
-                  value={editName}
-                  onChangeText={setEditName}
-                  placeholder="Business name"
-                  placeholderTextColor="#c7cbd0"
-                  style={styles.input}
-                />
-
-                <Text style={styles.label}>Email</Text>
-                <TextInput
-                  value={editEmail}
-                  onChangeText={setEditEmail}
-                  placeholder="you@domain.com"
-                  placeholderTextColor="#c7cbd0"
-                  style={styles.input}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                />
-
-                <Text style={styles.label}>Phone</Text>
-                <TextInput
-                  value={editPhone}
-                  onChangeText={setEditPhone}
-                  placeholder="Phone number"
-                  placeholderTextColor="#c7cbd0"
-                  style={styles.input}
-                  keyboardType="phone-pad"
-                />
-
-                <Text style={styles.label}>Street Address</Text>
-                <TextInput
-                  value={editLocation}
-                  onChangeText={setEditLocation}
-                  placeholder="Business address"
-                  placeholderTextColor="#c7cbd0"
-                  style={styles.input}
-                />
-
-                {(currentUser?.type ?? "") !== "INDIVIDUAL" && (
-                  <>
-                    <Text style={styles.label}>Business Name</Text>
-                    <TextInput
-                      value={editBusinessName}
-                      onChangeText={setEditBusinessName}
-                      placeholder="Business Name"
-                      placeholderTextColor="#c7cbd0"
-                      style={styles.input}
-                    />
-                  </>
-                )}
-
-                <Text style={styles.label}>Payment Plan</Text>
-                <View style={styles.typeWrap}>
-                  {loadingPricing ? (
-                    <ActivityIndicator size="large" color="#0ea360" />
-                  ) : (
-                    pricing
-                      .filter(
-                        (bt) =>
-                          bt.type?.toLowerCase() ===
-                          currentUser?.type?.toLowerCase(),
-                      )
-                      .map((bt) => (
-                        <TouchableOpacity
-                          key={bt.id}
-                          style={[
-                            styles.typeItem,
-                            editBusinessType === bt.id
-                              ? styles.typeItemSelected
-                              : undefined,
-                          ]}
-                          activeOpacity={0.85}
-                          onPress={() => setEditBusinessType(bt?.id as string)}
-                        >
-                          <View style={styles.typeRadioOuter}>
-                            {editBusinessType === bt.id ? (
-                              <View style={styles.typeRadioInner} />
-                            ) : null}
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.typeLabel}>{bt.title}</Text>
-                            <Text style={styles.typePrice}>{bt.price}</Text>
-                          </View>
-                        </TouchableOpacity>
-                      ))
-                  )}
-                </View>
-              </ScrollView>
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={styles.secondaryBtn}
-                  activeOpacity={0.85}
-                  onPress={() => setEditVisible(false)}
-                >
-                  <Text style={styles.secondaryText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.primaryBtn, { flex: 1, marginLeft: 8 }]}
-                  activeOpacity={0.85}
-                  onPress={handleSaveProfile}
-                >
-                  <Text style={styles.primaryText}>Save</Text>
-                </TouchableOpacity>
+          <View style={styles.card}>
+            {details.map((d) => (
+              <View key={d.label} style={styles.detailRowFull}>
+                <Text style={styles.detailLabelFull}>{d.label}</Text>
+                <Text style={styles.detailValueFull}>{d.value}</Text>
               </View>
-            </View>
-          </View>
-        </Modal>
+            ))}
 
-        {/* forgotten passsword section  */}
-        <Modal transparent visible={passwordVisible} animationType="slide">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Change Password</Text>
-              <Text style={styles.label}>New password</Text>
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  value={newPassword}
-                  onChangeText={setNewPassword}
-                  placeholder="New password"
-                  placeholderTextColor="#c7cbd0"
-                  style={[styles.input, { paddingRight: 44 }]}
-                  secureTextEntry={!showNewPassword}
-                />
-                <TouchableOpacity
-                  style={styles.eyeToggle}
-                  onPress={() => setShowNewPassword((v) => !v)}
-                  accessibilityLabel={
-                    showNewPassword ? "Hide password" : "Show password"
-                  }
-                >
-                  {showNewPassword ? (
-                    <EyeOff color="#5b6b73" />
-                  ) : (
-                    <Eye color="#5b6b73" />
-                  )}
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.label}>Confirm password</Text>
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  placeholder="Confirm password"
-                  placeholderTextColor="#c7cbd0"
-                  style={[styles.input, { paddingRight: 44 }]}
-                  secureTextEntry={!showConfirmPassword}
-                />
-                <TouchableOpacity
-                  style={styles.eyeToggle}
-                  onPress={() => setShowConfirmPassword((v) => !v)}
-                  accessibilityLabel={
-                    showConfirmPassword ? "Hide password" : "Show password"
-                  }
-                >
-                  {showConfirmPassword ? (
-                    <EyeOff color="#5b6b73" />
-                  ) : (
-                    <Eye color="#5b6b73" />
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity
-                onPress={handleForgotPassword}
-                style={{ marginTop: 8 }}
-              >
-                <Text style={{ color: "#0ea360", fontSize: 14 }}>
-                  Forgot your password?
-                </Text>
+            <View style={styles.actionsRow}>
+              <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.85} onPress={openPasswordModal}>
+                <Text style={styles.secondaryText}>Change Password</Text>
               </TouchableOpacity>
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={styles.secondaryBtn}
-                  activeOpacity={0.85}
-                  onPress={() => setPasswordVisible(false)}
-                >
-                  <Text style={styles.secondaryText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.primaryBtn, { flex: 1, marginLeft: 8 }]}
-                  activeOpacity={0.85}
-                  onPress={handleForgotPassword}
-                >
-                  <Text style={styles.primaryText}>Update</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={[styles.primaryBtn, { marginLeft: 12 }]}
+                activeOpacity={0.85}
+                onPress={async () => {
+                  try {
+                    await logout();
+                    router.replace("login" as RelativePathString);
+                    success("Logged out successfully");
+                  } catch (_error: any) {
+                    failed("Logout failed");
+                  }
+                }}
+              >
+                <Text style={styles.primaryText}>Logout</Text>
+              </TouchableOpacity>
             </View>
           </View>
-        </Modal>
+
+          {/* forgotten password modal */}
+          <Modal transparent visible={passwordVisible} animationType="slide">
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalCard}>
+                <Text style={styles.modalTitle}>Change Password</Text>
+                <Text style={styles.label}>New password</Text>
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    placeholder="New password"
+                    placeholderTextColor="#c7cbd0"
+                    style={[styles.input, { paddingRight: 44 }]}
+                    secureTextEntry={!showNewPassword}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeToggle}
+                    onPress={() => setShowNewPassword((v) => !v)}
+                    accessibilityLabel={showNewPassword ? "Hide password" : "Show password"}
+                  >
+                    {showNewPassword ? <EyeOff color="#5b6b73" /> : <Eye color="#5b6b73" />}
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.label}>Confirm password</Text>
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    placeholder="Confirm password"
+                    placeholderTextColor="#c7cbd0"
+                    style={[styles.input, { paddingRight: 44 }]}
+                    secureTextEntry={!showConfirmPassword}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeToggle}
+                    onPress={() => setShowConfirmPassword((v) => !v)}
+                    accessibilityLabel={showConfirmPassword ? "Hide password" : "Show password"}
+                  >
+                    {showConfirmPassword ? <EyeOff color="#5b6b73" /> : <Eye color="#5b6b73" />}
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity onPress={handleForgotPassword} style={{ marginTop: 8 }}>
+                  <Text style={{ color: "#0ea360", fontSize: 14 }}>Forgot your password?</Text>
+                </TouchableOpacity>
+
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.85} onPress={() => setPasswordVisible(false)}>
+                    <Text style={styles.secondaryText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.primaryBtn, { flex: 1, marginLeft: 8 }]} activeOpacity={0.85} onPress={handleForgotPassword}>
+                    <Text style={styles.primaryText}>Update</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#f6f8f9" },
-  container: { paddingBottom: 40 },
-  header: { paddingVertical: 14, paddingHorizontal: 14 },
+  safe: { flex: 1, backgroundColor: "#fff" },
+  container: { paddingBottom: 40, paddingHorizontal: 10, paddingVertical: 40, paddingTop: 60 },
+  bgGradient: {
+    position: "absolute",
+    top: -40,
+    right: -40,
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+  },
+  header: { alignItems: "flex-start", paddingHorizontal: 16, marginBottom: 24 },
+  logoBox: {
+    width: 124,
+    height: 124,
+    borderRadius: 16,
+    backgroundColor: "#f8fafc",
+    borderWidth: 2,
+    borderColor: "#0ea360",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+  },
+  logo: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+  },
+  welcomeSection: {
+    alignItems: "flex-start",
+    paddingHorizontal: 16,
+  },
+  welcomeTitle: {
+    fontSize: 28,
+    color: "#0f172a",
+    fontWeight: "600",
+    marginBottom: 8,
+    textAlign: "left",
+  },
+  welcomeSubtitle: {
+    fontSize: 36,
+    fontWeight: "800",
+    color: "#0ea360",
+    textAlign: "left",
+    marginBottom: 20,
+    lineHeight: 38,
+    textTransform: "capitalize",
+  },
+  welcomeDescription: {
+    fontSize: 18,
+    color: "#334155",
+    textAlign: "left",
+    lineHeight: 26,
+  },
+  card: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e6eaeb",
+    borderRadius: 16,
+    padding: 16,
+  },
+  detailRowFull: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eef2f7",
+  },
+  detailLabelFull: {
+    color: "#334155",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  detailValueFull: {
+    color: "#64748b",
+    fontWeight: "600",
+    fontSize: 13,
+    textAlign: "right",
+    flex: 1,
+    marginLeft: 12,
+  },
+  actionsRow: {
+    flexDirection: "column",
+    alignItems: "center",
+    marginTop: 16,
+    gap: 12,
+  },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -497,12 +351,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   primaryBtn: {
-    marginTop: 12,
     backgroundColor: "#0ea360",
     height: 46,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
+    width: "100%",
   },
   primaryText: { color: "#fff", fontSize: 16 },
   secondaryBtn: {
@@ -514,6 +368,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#d5dadc",
     backgroundColor: "#fff",
+    width: "100%",
   },
   secondaryText: { color: "#0ea360" },
 

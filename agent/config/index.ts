@@ -10,3 +10,4 @@ export const formatCurrency = (amount: number, currency: string = "NGN") => {
     maximumFractionDigits: 2,
   }).format(amount);
 }
+

@@ -35,7 +35,7 @@ export default function CompleteProfileScreen() {
             refresh();
         }
         if (wallet) {
-            router.replace("/pages/(pages)" as RelativePathString);
+            router.replace("/(pages)" as RelativePathString);
         }
     }, [currentUser?.uid, refresh, router, setUid, wallet]);
 
@@ -70,7 +70,7 @@ export default function CompleteProfileScreen() {
 
         try {
             const res = await createWallet(
-                currentUser?.fullname || currentUser?.name,
+                currentUser?.fullname || currentUser?.fullname,
                 bvn.trim(),
                 "AGENT",
                 currentUser?.uid || "",
@@ -112,7 +112,7 @@ export default function CompleteProfileScreen() {
             setLoading(true);
             const res = await createCode(securityCode, confirmSecurityCode);
             if (!res.ok) {
-                failed(res.message || res?.error || "Failed to set security code");
+                failed(res.message || "Failed to set security code");
                 return;
             }
 

@@ -1,15 +1,15 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { Eye, UserCircle } from "lucide-react";
+import { Eye } from "lucide-react";
 import KPI from "../../components/KPI";
 import LineChartCard from "../../components/LineChartCard";
 import PieChartCard from "../../components/PieChartCard";
 import withAuth from "../../components/withAuth";
-import { getAllPayments, getPricing } from "@/lib/api";
+import { getAllPayments } from "@/lib/api";
 import { getMembers } from "@/lib/services/member";
-import { getAgents } from "@/lib/services/agent";
 import { getPricingByCenter } from "@/lib/services/pricing";
 import { useAuth } from "@/context/AuthContext";
+import { getCompanies } from "@/lib/services/company";
 
 function Home() {
   const { user } = useAuth();
@@ -17,13 +17,13 @@ function Home() {
   const [isLive, setIsLive] = useState(true);
   const [members, setMembers] = useState([]);
   const [payments, setPayments] = useState([]);
-  const [agents, setAgents] = useState([]);
+  const [companies, setCompanies] = useState([]);
   const [pricing, setPricing] = useState([]);
   const [totals, setTotals] = useState({
     entities: 0,
     monthlyRevenue: 0,
     paymentRate: 0,
-    agents: 0,
+    companies: 0,
   });
 
   useEffect(() => {
@@ -42,11 +42,11 @@ function Home() {
         if (isCancelled) return;
         const allPayments = paymentsData?.data || paymentsData || [];
 
-        // fetch agents
-        const agentsData = await getAgents(userId);
+        // fetch companies
+        const companiesData = await getCompanies(userId);
         if (isCancelled) return;
-        const agentsList = agentsData?.data || [];
-        const totalAgents = agentsData?.meta?.total ?? agentsList.length;
+        const companyList = companiesData?.data || [];
+        const totalCompanies = companiesData?.meta?.total ?? companyList.length;
 
         // fetch pricing tiers
         const pricingData = await getPricingByCenter(userId);
@@ -87,21 +87,15 @@ function Home() {
 
         setMembers(membersList);
         setPayments(allPayments);
-        setAgents(agentsList);
+        setCompanies(companyList);
         setPricing(pricingList);
         setTotals({
           entities: totalEntities,
           monthlyRevenue: monthly,
           paymentRate,
-          agents: totalAgents,
+          companies: totalCompanies,
         });
-        console.log(
-          "Data loaded",
-          totalEntities,
-          monthly,
-          paymentRate,
-          totalAgents,
-        );
+
       } catch (error) {
         if (!isCancelled) {
           console.error("Failed to fetch data", error);
@@ -238,8 +232,8 @@ function Home() {
           colorClass="text-emerald-600"
         />
         <KPI
-          title="Active Agents"
-          value={totals.agents.toLocaleString()}
+          title="Active Partners"
+          value={totals.companies.toLocaleString()}
           meta="Registered"
           colorClass="text-emerald-600"
         />

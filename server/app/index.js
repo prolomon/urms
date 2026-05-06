@@ -4,6 +4,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import {apiRouter} from "../routes/index.js";
+import { startPaymentCron } from "../service/paymentCron.js";
 
 import dotenv from "dotenv";
 dotenv.config();
@@ -79,6 +80,8 @@ app.use(express.urlencoded({ extended: true, limit: bodySizeLimit }));
 
 // Routes
 app.use("/api", apiRouter);
+
+startPaymentCron();
 
 app.get("/", (req, res) => {
   res.send("Hello World!");

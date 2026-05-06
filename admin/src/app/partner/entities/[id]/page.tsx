@@ -28,17 +28,16 @@ import {
 } from "@/lib/services/member";
 import { getPayments } from "@/lib/api";
 import { getPricing, Pricing } from "@/lib/services/pricing";
-import { useAuth } from "@/context/AuthContext";
 import { getWallet, Wallet as WalletType } from "@/lib/services/wallet";
 import { Agent, getAgents } from "@/lib/services/agent";
-import { Company, getCompanies } from "@/lib/services/company";
+import { usePartner } from "@/context/PartnerContext";
 
 import Link from "next/link";
 
 export default function EntityDetailsPage({ params }) {
   const parameter: any = use(params);
   const id = parameter?.id;
-  const { user } = useAuth();
+  const { user } = usePartner();
 
   const router = useRouter();
   const [member, setMember] = useState<Member | null>(null);
@@ -66,27 +65,18 @@ export default function EntityDetailsPage({ params }) {
   const [toasts, setToasts] = useState([]);
   const [wallet, setWallet] = useState<WalletType | null>(null);
   const [isExist, setIsExist] = useState<boolean>(false);
-  const [selectedPricing, setSelectedPricing] = useState<Pricing | null>(null);
   const [memberPricing, setMemberPricing] = useState<Pricing[] | null>(null);
   const [memberPrices, setMemberPrices] = useState<string[]>([]);
-  const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
   const [selectedPricingIds, setSelectedPricingIds] = useState<string[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [currentAgent, setCurrentAgent] = useState<Agent | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [isAgentModalOpen, setIsAgentModalOpen] = useState(false);
   const [agentLoading, setAgentLoading] = useState(false);
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
-  const [selectedCompanyId, setSelectedCompanyId] = useState("");
-  const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
-  const [companyLoading, setCompanyLoading] = useState(false);
 
   const memberType = (member?.type || form.type || "BUSINESS").toUpperCase();
-  const memberCategory = (member?.category || form.category || "").toUpperCase();
   const isIndividual = memberType === "INDIVIDUAL";
   const pricingOptions = Array.isArray(pricing) ? Array.from(new Set(pricing.map((item) => item.category).filter(Boolean))) : [];
-  const [availablePricing, setAvailablePricing] = useState<Pricing[] | null>(null);
 
   const addToast = (type: "success" | "error", message: string, ttl = 4000) => {
     const id = Date.now() + Math.random();
@@ -152,7 +142,7 @@ export default function EntityDetailsPage({ params }) {
         setWallet(null);
         return;
       }
-      const walletData = await getWallet(customerCode, "member");
+      const walletData = await getWallet(customerCode, "MEMBER");
 
       setIsExist(walletData?.isExist || false);
       if (walletData?.ok) {
@@ -179,7 +169,8 @@ export default function EntityDetailsPage({ params }) {
 
     try {
       setAgentLoading(true);
-      const res = await getAgents(member?.uid || user.uid);
+      const res = await getAgents(user?.uid);
+      console.log(res)
       const allAgents = res?.data || [];
       setAgents(allAgents);
 
@@ -196,44 +187,11 @@ export default function EntityDetailsPage({ params }) {
     } finally {
       setAgentLoading(false);
     }
-  }, [member.agent, member?.uid, user.uid]);
-
-  const fetchCompanyData = useCallback(async () => {
-    if (!user?.uid) {
-      setCompanies([]);
-      setCurrentCompany(null);
-      return;
-    }
-
-    try {
-      setCompanyLoading(true);
-      const res = await getCompanies(user.uid);
-      const allCompanies = res?.data || [];
-      setCompanies(allCompanies);
-
-      const assignedCompanyId = (member as any)?.company || (member as any)?.companyId || "";
-      if (assignedCompanyId) {
-        const assignedCompany = allCompanies.find(
-          (company) => company.uid === assignedCompanyId || company.id === assignedCompanyId,
-        );
-        setCurrentCompany(assignedCompany || null);
-      } else {
-        setCurrentCompany(null);
-      }
-    } catch (error) {
-      console.error("Failed to fetch companies", error);
-    } finally {
-      setCompanyLoading(false);
-    }
-  }, [member, user?.uid]);
+  }, [member.agent, user?.uid]);
 
   useEffect(() => {
     fetchAgentData();
   }, [fetchAgentData]);
-
-  useEffect(() => {
-    fetchCompanyData();
-  }, [fetchCompanyData]);
 
   const handleChange = (k: string, v: string, p?: string) => {
     return setForm((s) => {
@@ -266,27 +224,6 @@ export default function EntityDetailsPage({ params }) {
       addToast("error", error?.message || "Failed to update agent");
     }
 
-  };
-
-  const handleCompanyChange = async (companyId: string) => {
-    if (!companyId) {
-      addToast("error", "Please select a company");
-      return;
-    }
-
-    try {
-      const res = await changeCompany(id || customerCode, companyId);
-
-      if (!res.ok) {
-        addToast("error", res.message || "Failed to update company");
-        return;
-      }
-
-      addToast("success", "Company updated");
-      fetchData();
-    } catch (error: any) {
-      addToast("error", error?.message || "Failed to update company");
-    }
   };
 
   const handleSave = async () => {
@@ -393,20 +330,6 @@ export default function EntityDetailsPage({ params }) {
     setEditing(false);
   };
 
-  const handlePricingSelect = (p: Pricing) => {
-    setSelectedPricing(p);
-    if (!p?.id) return;
-    setSelectedPricingIds((current) => [...new Set([...current, p.id])]);
-  };
-
-  const togglePricingSelection = (pricingId: string) => {
-    setSelectedPricingIds((current) =>
-      current.includes(pricingId)
-        ? current.filter((id) => id !== pricingId)
-        : [...current, pricingId],
-    );
-  };
-
   const escapeCSV = (val: string | number | null | undefined) => {
     if (val === null || val === undefined) return "";
     const s = typeof val === "string" ? val : String(val);
@@ -466,42 +389,6 @@ export default function EntityDetailsPage({ params }) {
       console.error("Export failed", e);
       addToast("error", "Failed to download payments");
     }
-  };
-
-  const getExpectedPricing = useCallback(() => {
-    if (memberPrices.length > 0 && pricing) {
-      const matchedPricing = pricing.filter((p) => memberPrices.includes(p.id || ""));
-      setMemberPricing(matchedPricing);
-    }
-
-    if (pricing) {
-      const filteredPricing = pricing.filter((p) => p.category === memberCategory && p.type === memberType && !memberPrices.includes(p.id || ""));
-      setAvailablePricing(filteredPricing);
-    }
-
-  }, [memberCategory, memberPrices, memberType, pricing])
-
-  useEffect(() => {
-    getExpectedPricing()
-  }, [getExpectedPricing])
-
-  const handlePricingSubmit = async (action: string) => {
-
-    const res = await paymentAction(id, selectedPricingIds || [], action);
-
-    if (!res.ok) {
-      addToast("error", res.message || "Failed to complete action");
-    }
-
-    getExpectedPricing();
-    fetchData();
-
-    setSelectedPricingIds([]);
-    setSelectedPricing(null);
-
-    addToast("success", "Selected pricing ids logged to console");
-    setIsPricingModalOpen(false);
-
   };
 
   if (loading) {
@@ -958,36 +845,6 @@ export default function EntityDetailsPage({ params }) {
               {memberPricing?.length} assigned pricing option(s)
             </p>
           </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedPricingIds(memberPrices);
-                setIsPricingModalOpen(true);
-              }}
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
-            >
-              Upgrade
-            </button>
-            {selectedPricing && (
-              <button
-                type="button"
-                onClick={async () => {
-                  if (selectedPricing.id) {
-                    setSelectedPricingIds((current) =>
-                      current.filter((id) => id !== selectedPricing.id),
-                    );
-                    handlePricingSubmit("downgrade");
-                  }
-                  setSelectedPricing(null);
-                }}
-                className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-50"
-              >
-                Downgrade
-              </button>
-            )}
-          </div>
         </div>
 
         {memberPricing && memberPricing.length === 0 ? (
@@ -1003,7 +860,6 @@ export default function EntityDetailsPage({ params }) {
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => handlePricingSelect(item)}
                   className={`text-left rounded-2xl border p-5 transition-all ${isSelected ? "border-emerald-300 bg-emerald-50 shadow-sm" : "border-slate-200 bg-white hover:border-emerald-200 hover:bg-emerald-50/40"}`}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -1048,59 +904,6 @@ export default function EntityDetailsPage({ params }) {
             })}
           </div>
         )}
-      </div>
-
-      {/* company information */}
-      <div className="rounded-2xl bg-white ring-1 ring-slate-100 shadow-sm overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 md:flex-row md:items-center md:justify-between md:p-6">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">Company Information</p>
-            <h3 className="mt-1 text-lg font-semibold text-slate-900">Assigned Company</h3>
-            <p className="mt-1 text-sm text-slate-600">
-              Manage this member&apos;s assigned company
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedCompanyId("");
-              setIsCompanyModalOpen(true);
-            }}
-            className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
-          >
-            Change Company
-          </button>
-        </div>
-
-        <div className="p-4 md:p-6">
-          {companyLoading ? (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              Loading company information...
-            </div>
-          ) : currentCompany ? (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-emerald-700">Current Company</p>
-                  <h4 className="mt-1 text-base font-semibold text-slate-900">
-                    {currentCompany.name || "Unnamed Company"}
-                  </h4>
-                  <p className="mt-1 text-sm text-slate-600">{currentCompany.uid || currentCompany.id || "No company id"}</p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-2 text-sm text-slate-700">
-                  <p>{currentCompany.email || "No email"}</p>
-                  <p>{currentCompany.phone || "No phone"}</p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              No company is currently assigned to this member.
-            </div>
-          )}
-        </div>
       </div>
 
       {/* agent information */}
@@ -1155,87 +958,6 @@ export default function EntityDetailsPage({ params }) {
           )}
         </div>
       </div>
-
-      {isCompanyModalOpen && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/50 p-4 h-screen">
-          <div className="w-full max-w-5xl rounded-2xl bg-white shadow-2xl">
-            <div className="flex flex-col gap-3 border-b border-slate-200 p-4 md:flex-row md:items-start md:justify-between md:p-6">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Change Company</p>
-                <h3 className="mt-1 text-lg font-semibold text-slate-900">Select a company</h3>
-                <p className="mt-1 text-sm text-slate-600">
-                  Click a company card to reveal the assign button.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setIsCompanyModalOpen(false);
-                  setSelectedCompanyId("");
-                }}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="max-h-[65vh] overflow-y-auto p-4 md:p-6">
-              {companies.length === 0 ? (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
-                  No companies found for this center.
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {companies.map((company) => {
-                    const companyId = company.uid || company.id || "";
-                    const isSelected = selectedCompanyId === companyId;
-
-                    return (
-                      <div
-                        key={companyId || company.email}
-                        className={`rounded-2xl border p-5 transition-all ${isSelected ? "border-emerald-300 bg-emerald-50 shadow-sm" : "border-slate-200 bg-white hover:border-emerald-200 hover:bg-emerald-50/40"}`}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => setSelectedCompanyId(companyId)}
-                          className="w-full text-left"
-                        >
-                          <p className="text-xs uppercase tracking-wide text-slate-500">Company</p>
-                          <h4 className="mt-1 text-base font-semibold text-slate-900">
-                            {company.name || "Unnamed Company"}
-                          </h4>
-                          <p className="mt-1 text-xs text-slate-600">{companyId || "No company id"}</p>
-
-                          <div className="mt-4 space-y-2 text-sm text-slate-700">
-                            <p>{company.email || "No email"}</p>
-                            <p>{company.phone || "No phone"}</p>
-                            <p>{company.location || "No location"}</p>
-                          </div>
-                        </button>
-
-                        {isSelected && companyId && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              handleCompanyChange(companyId);
-                              setIsCompanyModalOpen(false);
-                              setSelectedCompanyId("");
-                            }}
-                            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
-                          >
-                            Set as Company
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {isAgentModalOpen && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/50 p-4 h-screen">
@@ -1313,113 +1035,6 @@ export default function EntityDetailsPage({ params }) {
                   })}
                 </div>
               )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isPricingModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 h-screen">
-          <div className="w-full max-w-5xl rounded-2xl bg-white shadow-2xl">
-            <div className="flex flex-col gap-3 border-b border-slate-200 p-4 md:flex-row md:items-start md:justify-between md:p-6">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Upgrade Pricing</p>
-                <h3 className="mt-1 text-lg font-semibold text-slate-900">Select available plans</h3>
-                <p className="mt-1 text-sm text-slate-600">
-                  Filtered by {memberType}{memberCategory ? ` • ${memberCategory}` : ""}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {selectedPricingIds.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedPricingIds([])}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-                  >
-                    Clear
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setIsPricingModalOpen(false)}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-
-            <div className="max-h-[65vh] overflow-y-auto p-4 md:p-6">
-              {availablePricing.length === 0 ? (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
-                  No pricing plans match this member&apos;s type and category.
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {availablePricing.map((item) => {
-                    const checked = selectedPricingIds.includes(item.id || "");
-
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => togglePricingSelection(item.id || "")}
-                        className={`text-left rounded-2xl border p-5 transition-all ${checked ? "border-emerald-300 bg-emerald-50 shadow-sm" : "border-slate-200 bg-white hover:border-emerald-200 hover:bg-emerald-50/40"}`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-xs uppercase tracking-wide text-slate-500">Plan</p>
-                            <h4 className="mt-1 text-base font-semibold text-slate-900">
-                              {item.title || "Untitled Pricing"}
-                            </h4>
-                          </div>
-                          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${checked ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-700"}`}>
-                            {checked ? "Selected" : "Select"}
-                          </span>
-                        </div>
-
-                        <div className="mt-4 space-y-3 text-sm text-slate-600">
-                          <div className="flex items-center justify-between gap-3">
-                            <span>Type</span>
-                            <span className="font-semibold text-slate-800">{item.type || "—"}</span>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <span>Category</span>
-                            <span className="font-semibold text-slate-800">{item.category || "—"}</span>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <span>Price</span>
-                            <span className="font-semibold text-slate-800">
-                              {item.price ? `₦${Number(item.price).toLocaleString()}` : "—"}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 border-t border-slate-100 pt-4">
-                          <p className="text-xs uppercase tracking-wide text-slate-500">Benefit</p>
-                          <p className="mt-1 text-sm text-slate-700">
-                            {item.benefit || "No benefit description available."}
-                          </p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between gap-3 border-t border-slate-200 p-4 md:p-6">
-              <p className="text-sm text-slate-600">
-                {Number(selectedPricingIds.length - 1)} plan(s) selected
-              </p>
-              <button
-                type="button"
-                onClick={() => handlePricingSubmit("upgrade")}
-                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
-              >
-                Submit Selected
-              </button>
             </div>
           </div>
         </div>

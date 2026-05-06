@@ -82,7 +82,6 @@ export default function AgentDetailPage({ params }) {
     setMembersLoading(true);
     try {
       const memberRes = await getMembersByAgentId(memberPage, memberMeta.limit, id || "");
-      console.log("Members Response:", memberRes);
 
       setMembers(memberRes?.data || []);
       if (memberRes?.meta) {
@@ -132,6 +131,7 @@ export default function AgentDetailPage({ params }) {
       }
 
       const walletData = await getWallet(walletOwnerId, "AGENT");
+      
       setIsWalletExist(Boolean(walletData?.isExist));
       if (walletData?.ok) {
         setWallet(walletData?.wallet || null);
