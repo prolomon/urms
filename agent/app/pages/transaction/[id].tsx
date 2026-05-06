@@ -1,5 +1,5 @@
 import { formatCurrency } from "@/config";
-import { getTransaction } from "@/lib/services/transaction";
+// import { getTransaction } from "@/lib/services/transaction";
 import { Transaction } from "@/lib/types";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
@@ -20,25 +20,25 @@ export default function TransactionDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [transaction, setTransaction] = useState<Transaction | null>(null);
 
-  const loadTransaction = useCallback(async () => {
-    try {
-      if (!id) {
-        setTransaction(null);
-        return;
-      }
+  // const loadTransaction = useCallback(async () => {
+  //   try {
+  //     if (!id) {
+  //       setTransaction(null);
+  //       return;
+  //     }
 
-      const data = await getTransaction(id);
-      setTransaction(data?.transactions || null);
-    } catch {
-      setTransaction(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
+  //     const data = await getTransaction(id);
+  //     setTransaction(data?.transactions || null);
+  //   } catch {
+  //     setTransaction(null);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // }, [id]);
 
-  useEffect(() => {
-    loadTransaction();
-  }, [loadTransaction]);
+  // useEffect(() => {
+  //   loadTransaction();
+  // }, [loadTransaction]);
 
   return (
     <SafeAreaView style={styles.safe}>
