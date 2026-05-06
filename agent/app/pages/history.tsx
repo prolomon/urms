@@ -1,6 +1,6 @@
 import { formatCurrency } from "@/config";
 import { useAuth } from "@/hooks/use-auth";
-import { getTransactions } from "@/lib/services/transaction";
+// import { getTransactions } from "@/lib/services/transaction";
 import { Transaction } from "@/lib/types";
 import { RelativePathString, useRouter } from "expo-router";
 import { ArrowLeft, ReceiptText } from "lucide-react-native";
@@ -26,36 +26,36 @@ export default function HistoryScreen() {
 	const [items, setItems] = useState<Transaction[]>([]);
 	const [dateFilter, setDateFilter] = useState<DateFilter>("ALL");
 
-	const loadPayments = useCallback(async () => {
-		try {
-			const userId = currentUser?.id || currentUser?.uid;
-			if (!userId) {
-				setItems([]);
-				return;
-			}
+	// const loadPayments = useCallback(async () => {
+	// 	try {
+	// 		const userId = currentUser?.id || currentUser?.uid;
+	// 		if (!userId) {
+	// 			setItems([]);
+	// 			return;
+	// 		}
 
-			const data = await getTransactions(userId);
-			const sorted = [...(data?.transactions || [])].sort(
-				(a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-			);
-			setItems(sorted);
-		} catch {
-			setItems([]);
-		}
-	}, [currentUser?.id, currentUser?.uid]);
+	// 		const data = await getTransactions(userId);
+	// 		const sorted = [...(data?.transactions || [])].sort(
+	// 			(a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+	// 		);
+	// 		setItems(sorted);
+	// 	} catch {
+	// 		setItems([]);
+	// 	}
+	// }, [currentUser?.id, currentUser?.uid]);
 
-	useEffect(() => {
-		(async () => {
-			setLoading(true);
-			await loadPayments();
-			setLoading(false);
-		})();
-	}, [loadPayments]);
+	// useEffect(() => {
+	// 	(async () => {
+	// 		setLoading(true);
+	// 		await loadPayments();
+	// 		setLoading(false);
+	// 	})();
+	// }, [loadPayments]);
 
 	const onRefresh = async () => {
 		setRefreshing(true);
-		await loadPayments();
-		setRefreshing(false);
+		// await loadPayments();
+		// setRefreshing(false);
 	};
 
 	const getStatusColor = (status?: string) => {
