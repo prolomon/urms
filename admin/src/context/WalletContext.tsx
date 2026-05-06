@@ -33,7 +33,7 @@ export const WalletProvider = ({ children }) => {
                 return;
             }
 
-            const { ok, wallet, message, isExist } = await getWallet(uid, "COMPANY");
+            const { ok, wallet, message, isExist } = await getWallet(uid, "ADMIN");
 
             if (isExist) {
                 if (ok && wallet) {

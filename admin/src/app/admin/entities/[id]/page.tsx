@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, use, useCallback } from "react";
+import React, { useEffect, useState, use, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Edit2,
@@ -27,7 +27,7 @@ import {
   changeCompany,
 } from "@/lib/services/member";
 import { getPayments } from "@/lib/api";
-import { getPricing, Pricing } from "@/lib/services/pricing";
+import { getPricing, getPricingByCenter, Pricing } from "@/lib/services/pricing";
 import { useAuth } from "@/context/AuthContext";
 import { getWallet, Wallet as WalletType } from "@/lib/services/wallet";
 import { Agent, getAgents } from "@/lib/services/agent";
@@ -81,12 +81,45 @@ export default function EntityDetailsPage({ params }) {
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [companyLoading, setCompanyLoading] = useState(false);
+  const isFetchingRef = useRef(false);
+  const lastFetchAtRef = useRef(0);
+
+  const normalizePricingIds = (value: unknown): string[] => {
+    if (typeof value === "string") {
+      return value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+
+    if (!Array.isArray(value)) return [];
+
+    return Array.from(
+      new Set(
+        value
+          .map((item) => {
+            if (typeof item === "string") return item;
+            if (!item || typeof item !== "object") return "";
+
+            const pricingItem = item as Record<string, unknown>;
+            return String(
+              pricingItem.id ||
+              pricingItem._id ||
+              pricingItem.uid ||
+              pricingItem.pricingId ||
+              "",
+            ).trim();
+          })
+          .filter(Boolean),
+      ),
+    );
+  };
 
   const memberType = (member?.type || form.type || "BUSINESS").toUpperCase();
   const memberCategory = (member?.category || form.category || "").toUpperCase();
   const isIndividual = memberType === "INDIVIDUAL";
   const pricingOptions = Array.isArray(pricing) ? Array.from(new Set(pricing.map((item) => item.category).filter(Boolean))) : [];
-  const [availablePricing, setAvailablePricing] = useState<Pricing[] | null>(null);
+  const [availablePricing, setAvailablePricing] = useState<Pricing[]>([]);
 
   const addToast = (type: "success" | "error", message: string, ttl = 4000) => {
     const id = Date.now() + Math.random();
@@ -94,15 +127,26 @@ export default function EntityDetailsPage({ params }) {
     setTimeout(() => setToasts((s) => s.filter((t) => t.id !== id)), ttl);
   };
 
+  const isRateLimitError = (error: unknown) => {
+    if (!(error instanceof Error)) return false;
+    return /too many requests|429/i.test(error.message || "");
+  };
+
   const fetchData = useCallback(() => {
     let mounted = true;
     const load = async () => {
+      if (isFetchingRef.current) return;
+      const now = Date.now();
+      if (now - lastFetchAtRef.current < 1200) return;
+
+      isFetchingRef.current = true;
+      lastFetchAtRef.current = now;
       setLoading(true);
       try {
         const [m, p, pr] = await Promise.all([
           getMember(id),
           getPayments(id),
-          getPricing(user?.uid, 1, 100),
+          user?.uid ? getPricingByCenter(user.uid) : Promise.resolve({ data: [] }),
         ]);
         if (!mounted) return;
 
@@ -110,7 +154,14 @@ export default function EntityDetailsPage({ params }) {
         const paymentsData = p?.payments || [];
         const pricingData = pr?.data || [];
         setMember(data);
-        setMemberPrices(Array.isArray(data?.pricing) ? data.pricing : []);
+        const resolvedMemberPricing = normalizePricingIds(
+          data?.pricing ||
+          (data as any)?.pricings ||
+          (data as any)?.memberPricing ||
+          (data as any)?.memberPrices ||
+          [],
+        );
+        setMemberPrices(resolvedMemberPricing);
 
         setPayments(paymentsData);
         setPricing(pricingData);
@@ -130,10 +181,18 @@ export default function EntityDetailsPage({ params }) {
 
         addToast("success", "Member loaded");
       } catch (e) {
-        console.error(e);
-        addToast("error", "Failed to fetch member");
+        if (!isRateLimitError(e)) {
+          console.error(e);
+        }
+        addToast(
+          "error",
+          isRateLimitError(e)
+            ? "Too many requests, please wait a moment and retry."
+            : "Failed to fetch member",
+        );
       } finally {
         if (mounted) setLoading(false);
+        isFetchingRef.current = false;
       }
     };
     load();
@@ -171,7 +230,7 @@ export default function EntityDetailsPage({ params }) {
   }, [fetchWalletData])
 
   const fetchAgentData = useCallback(async () => {
-    if (!user?.uid) {
+    if (!user?.uid || !member) {
       setAgents([]);
       setCurrentAgent(null);
       return;
@@ -193,14 +252,16 @@ export default function EntityDetailsPage({ params }) {
         setCurrentAgent(null);
       }
     } catch (error) {
-      console.error("Failed to fetch agents", error);
+      if (!isRateLimitError(error)) {
+        console.error("Failed to fetch agents", error);
+      }
     } finally {
       setAgentLoading(false);
     }
-  }, [member?.agent, member?.company, user?.uid]);
+  }, [member, user?.uid]);
 
   const fetchCompanyData = useCallback(async () => {
-    if (!user?.uid) {
+    if (!user?.uid || !member) {
       setCompanies([]);
       setCurrentCompany(null);
       return;
@@ -222,7 +283,9 @@ export default function EntityDetailsPage({ params }) {
         setCurrentCompany(null);
       }
     } catch (error) {
-      console.error("Failed to fetch companies", error);
+      if (!isRateLimitError(error)) {
+        console.error("Failed to fetch companies", error);
+      }
     } finally {
       setCompanyLoading(false);
     }
@@ -352,6 +415,14 @@ export default function EntityDetailsPage({ params }) {
       const data = m?.data;
       const paymentsData = p?.data || p?.payment || p || [];
       setMember(data);
+      const resolvedMemberPricing = normalizePricingIds(
+        data?.pricing ||
+        (data as any)?.pricings ||
+        (data as any)?.memberPricing ||
+        (data as any)?.memberPrices ||
+        [],
+      );
+      setMemberPrices(resolvedMemberPricing);
       setPayments(paymentsData);
       setForm({
         fullname: data?.fullname || "",
@@ -473,11 +544,19 @@ export default function EntityDetailsPage({ params }) {
     if (memberPrices.length > 0 && pricing) {
       const matchedPricing = pricing.filter((p) => memberPrices.includes(p.id || ""));
       setMemberPricing(matchedPricing);
+    } else {
+      setMemberPricing([]);
     }
 
     if (pricing) {
-      const filteredPricing = pricing.filter((p) => p.category === memberCategory && p.type === memberType && !memberPrices.includes(p.id || ""));
+      const filteredPricing = pricing.filter((p) => {
+        const cat = (p.category || "").toUpperCase();
+        const type = (p.type || "").toUpperCase();
+        return cat === memberCategory && type === memberType && !memberPrices.includes(p.id || "");
+      });
       setAvailablePricing(filteredPricing);
+    } else {
+      setAvailablePricing([]);
     }
 
   }, [memberCategory, memberPrices, memberType, pricing])
@@ -619,6 +698,8 @@ export default function EntityDetailsPage({ params }) {
   }, {} as Record<string, { label: string; totalPaid: number; pending: number; owing: number; total: number }>);
 
   const paymentSummaryCards = Object.values(paymentSummaryByCategory);
+
+
 
   return (
     <div className="mx-auto w-full space-y-4 p-4 md:p-6">

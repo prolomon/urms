@@ -15,14 +15,6 @@ export default function Pricing() {
   const [successToast, setSuccessToast] = useState("");
   const [entityCounts, setEntityCounts] = useState<Record<string, number>>({});
 
-  const [formData, setFormData] = useState<PricingType>({
-    title: "",
-    price: "",
-    type: "BUSINESS",
-    benefit: "",
-    category: "SMALL",
-  });
-
   const fetchPricingEntity = useCallback(async (pricingId: string) => {
     try {
       const data = await getMembersByPricingId(1, 1000, pricingId);

@@ -1,5 +1,17 @@
 import { API_URL, buildHeaders } from "../api";
 
+async function parseResponseBody(response: Response) {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  const text = await response.text();
+  return {
+    message: text || `HTTP ${response.status}: ${response.statusText}`,
+  };
+}
+
 export type Company = {
   id?: string;
   uid?: string;
@@ -24,7 +36,7 @@ export async function getCompanies(uid: string): Promise<{ ok: boolean; data?: C
   const response = await fetch(`${API_URL}/company/center/${uid}`, {
     headers: {...buildHeaders(false)},
   });
-  const data = await response.json();
+  const data = await parseResponseBody(response);
   if (!response.ok) {
     throw new Error(data.message || "Failed to fetch companies");
   }
@@ -38,7 +50,7 @@ export async function getCompany(uid: string): Promise<{ ok: boolean; company?: 
   const response = await fetch(`${API_URL}/company/${uid}`, {
     headers: {...buildHeaders(false)},
   });
-  const data = await response.json();
+  const data = await parseResponseBody(response);
   if (!response.ok) {
     throw new Error(data.message || "Failed to fetch companies");
   }

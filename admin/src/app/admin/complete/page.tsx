@@ -29,6 +29,8 @@ export default function CompleteProfileScreen() {
     }
   }, [router, wallet, setUid, user?.uid])
 
+  console.log(wallet)
+
   const success = (message: string) => {
     setToast({ type: "success", message });
     window.setTimeout(() => setToast(null), 3500);
@@ -55,7 +57,7 @@ export default function CompleteProfileScreen() {
   }, [wallet]);
 
   const handleValidateWallet = () => {
-    if (wallet || isExist) {
+    if (wallet) {
       setStep(3);
     } else {
       setStep(2);

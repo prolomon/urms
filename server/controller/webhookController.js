@@ -15,6 +15,24 @@ const nombaWebhook = async (req, res) => {
   try {
     const event = req.body;
 
+    if (req.body.event === "payment_success") {
+    const { amount, reference, customer } = req.body.data;
+
+    // Find user by email or phone
+    const user = await prisma.user.findUnique({
+      where: { email: customer.email }
+    });
+
+    if (user) {
+      await prisma.wallet.update({
+        where: { userId: user.id },
+        data: { balance: { increment: amount } }
+      });
+
+      console.log(`Wallet credited: User=${user.id}, Ref=${reference}, Amount=${amount / 100}`);
+    }
+  }
+
     if (!event || typeof event !== 'object') {
       return res.status(400).json({ ok: false, message: 'Invalid payload' });
     }
