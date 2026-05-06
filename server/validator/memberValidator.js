@@ -186,7 +186,7 @@ const changeSecurityTokenSchema = Joi.object({
 });
 
 const verifySecurityCodeSchema = Joi.object({
-  securityCode: Joi.string().pattern(alphaNumPattern).required().messages({
+  securityCode: Joi.string().required().messages({
     "string.pattern.base":
       "Security code must contain only letters and numbers",
     "string.empty": "Security code is required",

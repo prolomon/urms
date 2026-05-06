@@ -40,7 +40,6 @@ export default function Dashboard() {
   const walletBank = wallet?.bank?.name || "-";
 
   const loadVerifyWallet = useCallback(async () => {
-    console.log(wallet); // Debug log to check wallet state
     if (!wallet) {
       router.push("/complete" as RelativePathString);
       return;
@@ -179,7 +178,7 @@ export default function Dashboard() {
             <TouchableOpacity
               style={styles.quickActionItem}
               activeOpacity={0.8}
-              onPress={() => router.push("/payments" as RelativePathString)}
+              onPress={() => router.push("/payment" as RelativePathString)}
             >
               <View style={styles.quickActionIconWrap}>
                 <HandCoins size={20} color="#0ea360" />

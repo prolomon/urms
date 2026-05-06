@@ -75,6 +75,7 @@ const createWallet = async (req, res) => {
           status: acc?.data?.expired,
           accountName: acc?.data?.bankAccountName,
           currency: acc?.data?.currency,
+          accountHolderId: acc?.data?.accountHolderId,
         },
       });
 
@@ -132,15 +133,7 @@ const getWalletById = async (req, res) => {
 const getAllWallets = async (req, res) => {
   try {
     const wallets = await prisma.wallet.findMany({
-      orderBy: { createdAt: "desc" },
-      include: {
-        member: {
-          select: { uid: true, fullname: true, email: true },
-        },
-        admin: {
-          select: { uid: true, adminName: true, email: true },
-        },
-      },
+      orderBy: { createdAt: "desc" }
     });
 
     return res.status(200).json({ ok: true, wallets });

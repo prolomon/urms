@@ -190,8 +190,6 @@ const getAllAdmins = async (req, res) => {
           adminEmail: true,
           adminLocation: true,
           adminPhone: true,
-          paystackCustomerId: true,
-          paystackCustomerCode: true,
         },
       }),
       prisma.admin.count(),

@@ -76,3 +76,23 @@ export async function schedulePayment(userId: string, frequency: string, amount:
     }   
     return data;
 }
+
+export async function makePayment (userId: string, amount: number, paymentId: string, center: string, company: string, token: string): Promise<{
+    ok: boolean;
+    payment?: any;
+    message?: string;
+}> {
+    if (!userId) {
+        throw new Error("No user ID provided");
+    }
+    const response = await fetch(`${API_URL}/payment/make/${userId}/${paymentId}`, {
+        method: "POST",
+        headers: buildHeaders(true, token),
+        body: JSON.stringify({ amount, center, company }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || "Failed to make payment");
+    }
+    return data;
+}
