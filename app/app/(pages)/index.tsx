@@ -11,7 +11,6 @@ import {
   Eye,
   EyeOff,
   History,
-  ScanBarcode,
   User,
   HandCoins
 } from "lucide-react-native";
@@ -41,6 +40,7 @@ export default function Dashboard() {
   const walletBank = wallet?.bank?.name || "-";
 
   const loadVerifyWallet = useCallback(async () => {
+    console.log(wallet); // Debug log to check wallet state
     if (!wallet) {
       router.push("/complete" as RelativePathString);
       return;

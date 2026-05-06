@@ -378,10 +378,11 @@ const updateMember = async (req, res) => {
 
 const deleteMember = async (req, res) => {
   try {
-    // Get member before deletion to use for notification
+    // Get member before deletion
     const memberToDelete = await prisma.member.findUnique({
       where: { uid: req.params.id },
       select: {
+        id: true,
         uid: true,
         fullname: true,
         email: true,
@@ -390,10 +391,16 @@ const deleteMember = async (req, res) => {
     if (!memberToDelete)
       return res.status(404).json({ error: "Member not found" });
 
+    // Delete related notifications first
+    await prisma.notification.deleteMany({
+      where: { userId: memberToDelete.id },
+    });
+
+    // Then delete the member
     const member = await prisma.member.delete({
       where: { uid: req.params.id },
     });
-    res.status(204).json({ ok: true, message: "Member deleted successfully" });
+    res.status(200).json({ ok: true, message: "Member deleted successfully" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });

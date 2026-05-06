@@ -74,7 +74,7 @@ export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
                 return;
             }
 
-            const { ok, wallet, message } = await getWallet(uid, "MEMBER", token as string);
+            const { ok, wallet, message } = await getWallet(uid, "AGENT", token as string);
 
             if (ok && wallet) {
                 setIsWallet(true);

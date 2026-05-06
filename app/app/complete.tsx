@@ -57,7 +57,7 @@ export default function CompleteProfileScreen() {
 
     const handleValidateWallet = () => {
         success("Wallet validation successful");
-        if (validationState.hasWallet) {
+        if (wallet) {
             setStep(3);
         } else {
             setStep(2);
@@ -72,7 +72,7 @@ export default function CompleteProfileScreen() {
             const res = await createWallet(
                 currentUser?.fullname || currentUser?.fullname,
                 bvn.trim(),
-                "AGENT",
+                "MEMBER",
                 currentUser?.uid || "",
                 token as string
             );
