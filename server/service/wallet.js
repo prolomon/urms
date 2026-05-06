@@ -116,12 +116,9 @@ export const createAccount = async (name, bvn, id) => {
         const payload = {
             // include both camelCase and snake_case keys for compatibility with differing API docs
             accountRef: id || nanoid(),
-            account_reference: id || nanoid(),
             accountName: name,
-            account_name: name,
             bvn: bvn,
             expiryDate: "2026-05-06 12:15:00",
-            expiry_date: "2026-05-06 12:15:00",
         };
 
         const token = await getManagedAccessToken();
