@@ -686,11 +686,57 @@ const makePayment = async (req, res) => {
       }
     }
 
+    // Update payment debt by subtracting the paid amount
+    let updatedPaymentRecord = null;
+    try {
+      const existingPayment = await prisma.payment.findFirst({
+        where: {
+          userId,
+          payment: paymentId,
+        },
+      });
+
+      if (existingPayment) {
+        const currentDebt = Number(existingPayment.debt ?? 0);
+        const newDebt = Math.max(currentDebt - totalAmount, 0);
+
+        updatedPaymentRecord = await prisma.payment.update({
+          where: { id: existingPayment.id },
+          data: {
+            debt: newDebt,
+            status: newDebt <= 0 ? 'SUCCESS' : 'PENDING',
+          },
+        });
+
+        // Record debt update transaction
+        await prisma.transaction.create({
+          data: {
+            reference: paymentReference,
+            event: 'payment.debt.updated',
+            status: 'SUCCESS',
+            amount: totalAmount,
+            currency: 'NGN',
+            channel: 'wallet',
+            paymentReference,
+            userId,
+            metadata: {
+              previousDebt: currentDebt,
+              newDebt,
+              amountPaid: totalAmount,
+            },
+          },
+        }).catch(() => null);
+      }
+    } catch (err) {
+      console.error('Error updating payment debt:', err?.message || err);
+    }
+
     return res.status(201).json({
       ok: true,
       message: 'Payment initiated, split and transfers initialized successfully',
       data: {
         payment,
+        paymentDebt: updatedPaymentRecord || null,
         split: {
           mainWallet: mainAmount + operationAmount,
           agentWallet: agentAmount + technologyAmount,
