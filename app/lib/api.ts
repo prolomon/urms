@@ -1,9 +1,9 @@
 export const API_URL=process.env.EXPO_PUBLIC_API_URL + "/api"
 
-export const AUTH_AGENT = "urms_agent";
-export const AUTH_AGENT_WALLET = "urms_agent_wallet";
-export const AUTH_AGENT_WALLET_STATE = "urms_agent_wallet_state";
-export const AUTH_AGENT_TOKEN = "urms_agent_token";
+export const AUTH_MEMBER = "urms_member";
+export const AUTH_MEMBER_WALLET = "urms_member_wallet";
+export const AUTH_MEMBER_WALLET_STATE = "urms_member_wallet_state";
+export const AUTH_MEMBER_TOKEN = "urms_member_token";
 
 
 export function buildHeaders(

@@ -1,5 +1,5 @@
 "use client";
-import  { useState, useEffect } from "react";
+import  { useState, useEffect, useCallback } from "react";
 import {
   Search,
   Plus,
@@ -9,18 +9,17 @@ import {
   ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
-import { getMembers, Member } from "@/lib/services/member";
-import { useAuth } from "@/context/AuthContext";
-import { getPricingByCenter } from "@/lib/services/pricing";
+import { getMembersByCompanyId, Member } from "@/lib/services/member";
+import { usePartner } from "@/context/PartnerContext";
 import { useRouter } from "next/navigation";
 
 export default function EntitiesPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { uid, user } = usePartner();
   const [searchTerm, setSearchTerm] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("All Categories");
   const [typeFilter, setTypeFilter] = useState("All Types");
   const [members, setMembers] = useState<Member[] | null>(null);
+  const [loading, setLoading] = useState(false);
   const [meta, setMeta] = useState({
     page: 1,
     limit: 100,
@@ -28,49 +27,36 @@ export default function EntitiesPage() {
     totalPages: 1,
   });
   const [page, setPage] = useState(1);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState("All");
   const centerId = user?.uid || "";
 
-  useEffect(() => {
-    const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+      setLoading(true);
       try {
-        const [memberData, pricingData] = await Promise.all([
-          getMembers(page, 100, centerId),
-          getPricingByCenter(centerId),
-        ]);
+        const companyId = centerId || uid;
+        const memberData = await getMembersByCompanyId(page, 100, companyId);
 
-        const memberList = Array.isArray(memberData?.data)
-          ? memberData.data
-          : [];
-        setMembers(memberList);
+        setMembers(memberData?.data || []);
         setMeta(
           memberData?.meta || { page, limit: 100, total: 0, totalPages: 1 },
         );
 
-        setCategories(
-          Array.isArray(pricingData?.data)
-            ? Array.from(
-              new Set(
-                pricingData.data
-                  .map((p) => p.category)
-                  .filter((c): c is string => !!c),
-              ),
-            )
-            : [],
-        );
       } catch (error) {
         console.error("Failed to fetch data", error);
+      } finally {
+        setLoading(false);
       }
-    };
+  }, [page, centerId, uid]);
 
+  useEffect(() => {
     fetchData();
-  }, [page, centerId]);
+  }, [fetchData]);
 
   // reset to page 1 when search or filters change (deferred to avoid cascading renders)
   useEffect(() => {
     const id = setTimeout(() => setPage(1), 0);
     return () => clearTimeout(id);
-  }, [searchTerm, categoryFilter, typeFilter]);
+  }, [searchTerm, statusFilter, typeFilter]);
 
   const memberList = Array.isArray(members) ? members : [];
   const filteredMembers = memberList.filter((m) => {
@@ -81,17 +67,16 @@ export default function EntitiesPage() {
       !q ||
       [m.uid, m.fullname, m.businessName, m.email, m.phone]
         .filter(Boolean)
-        .some((v) => v.toLowerCase().includes(q));
+        .some((v) => String(v).toLowerCase().includes(q));
 
-    const matchesCategory =
-      categoryFilter === "All Categories" ||
-      (m.category &&
-        m.category.toLowerCase() === categoryFilter.toLowerCase());
+    const matchesStatus =
+      statusFilter === "All" ||
+      (statusFilter === "Active" ? Boolean(m.status) : !Boolean(m.status));
 
     const matchesType =
       typeFilter === "All Types" || (m.type && m.type === typeFilter);
 
-    return matchesQuery && matchesCategory && matchesType;
+    return matchesQuery && matchesStatus && matchesType;
   });
 
   // CSV helpers — include fields that are not shown in the table
@@ -218,7 +203,7 @@ export default function EntitiesPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2 md:gap-3">
             <button className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 md:px-4" onClick={() => {
-              router.push("/admin/entities/add");
+              router.push("/partner/entities/add");
             }}>
               <Plus size={18} />
               <span className="hidden sm:inline">Add Entity</span>
@@ -256,16 +241,13 @@ export default function EntitiesPage() {
             </div>
 
             <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
               className="flex-1 rounded-xl border border-slate-300 bg-transparent px-4 py-2.5 text-sm text-slate-600 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 appearance-none"
             >
-              <option>All Categories</option>
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
+              <option>All Status</option>
+              <option>Active</option>
+              <option>Inactive</option>
             </select>
 
             <select
@@ -309,7 +291,7 @@ export default function EntitiesPage() {
                     >
                       <td className="px-4 py-4 font-mono text-xs md:px-6 md:text-sm">
                         <Link
-                          href={`/admin/entities/${entity.uid}`}
+                          href={`/partner/entities/${entity.uid}`}
                           className="rounded-lg text-xs font-medium text-slate-600 transition-colors hover:text-emerald-600 md:text-sm"
                         >
                           {entity.uid}

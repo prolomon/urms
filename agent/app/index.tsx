@@ -17,6 +17,7 @@ export default function WelcomeScreen() {
         pointerEvents="none"
       />
       <View style={styles.container}>
+
         {/* Header with logo */}
         <View style={styles.header}>
           <View style={styles.logoBox}>
@@ -27,6 +28,7 @@ export default function WelcomeScreen() {
             />
           </View>
         </View>
+
         {/* Welcome Message */}
         <View style={styles.welcomeSection}>
           <Text style={styles.welcomeTitle}>Welcome to the</Text>
@@ -55,7 +57,7 @@ export default function WelcomeScreen() {
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            © 2026 Karu Revenue Management System
+            © {new Date().getFullYear()} Tr3-G Innovation Limited
           </Text>
         </View>
       </View>
@@ -78,7 +80,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    justifyContent: "center",
+    justifyContent: "flex-end",
     paddingHorizontal: 10,
     paddingVertical: 40,
     paddingTop: 60,
@@ -148,6 +150,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 6,
+    marginBottom: 20,
   },
   primaryButton: {
     backgroundColor: "#0ea360",
@@ -181,7 +184,7 @@ const styles = StyleSheet.create({
   footerText: {
     textAlign: "center",
     color: "#64748b",
-    fontSize: 12,
+    fontSize: 16,
     opacity: 0.8,
   },
 });

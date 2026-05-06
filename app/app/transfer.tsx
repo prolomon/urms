@@ -2,7 +2,7 @@ import { formatCurrency } from "@/config";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { useWallet } from "@/hooks/use-wallet";
-import { AUTH_AGENT_TOKEN } from "@/lib/api";
+import { AUTH_MEMBER_TOKEN } from "@/lib/api";
 import bankList from "@/lib/jsons/banklist.json";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { RelativePathString, useRouter } from "expo-router";
@@ -74,7 +74,7 @@ export default function TransferScreen() {
 
   useEffect(() => {
     (async () => {
-      const tok = await AsyncStorage.getItem(AUTH_AGENT_TOKEN);
+      const tok = await AsyncStorage.getItem(AUTH_MEMBER_TOKEN);
       if (tok) setToken(tok);
     })();
   }, []);
@@ -159,7 +159,7 @@ export default function TransferScreen() {
       setRecipientName("");
       setAmount("");
       setReason("");
-      refresh();
+      refresh?.();
       router.push("index" as RelativePathString);
     } catch (e: any) {
       failed(e?.message || "Transfer failed");

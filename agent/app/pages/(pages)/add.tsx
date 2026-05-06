@@ -22,40 +22,54 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { getPricing } from "@/lib/services/pricing";
 
+const CATEGORY_OPTIONS = [
+  { value: "HOSPITALITY & ACCOMMODATION", label: "Hospitality & Accommodation" },
+  { value: "FOOD & BEVERAGE", label: "Food & Beverage" },
+  { value: "CORPORATE & OFFICE PREMISES", label: "Corporate & Office Premises" },
+  { value: "RETAIL & TRADE", label: "Retail & Trade" },
+  { value: "SERVICES & ARTISANS", label: "Services & Artisans" },
+  { value: "MEDIA & TELECOMMUNICATIONS", label: "Media & Telecommunications" },
+] as const;
+
 export default function RegisterScreen() {
-  const { register, currentUser } = useAuth();
+  const { register, currentUser, token } = useAuth();
   const { success, failed } = useToast();
   const initialType = "INDIVIDUAL"
-  const initialCategory = "SMALL"
+  const initialCategory = CATEGORY_OPTIONS[0].value
 
   const [formData, setFormData] = useState<Member | null>({
     fullname: "",
     email: "",
     pricing: [],
     businessName: "",
-    location: null,
+    location: {
+      state: "FCT",
+      city: "Karu",
+      address: "",
+      zipcode: "000000",
+      nearestBusStop: ""
+    },
     phone: "",
     center: "",
     agent: "",
     type: initialType as "BUSINESS" | "INDIVIDUAL",
-    category: initialCategory as "SMALL" | "MEDIUM" | "LARGE",
+    category: initialCategory || "",
   });
   const router = useRouter();
   const [pricing, setPricing] = useState<Pricing[]>([]);
   const [loadingPricing, setLoadingPricing] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const selectedType = formData?.type;
-  const selectedCategory = formData?.category;
   const isIndividual = selectedType === "INDIVIDUAL";
   const [loading, setLoading] = useState(false);
 
   const fetchPricing = useCallback(async () => {
     try {
       setLoadingPricing(true);
-      const response = await getPricing(1, 100, currentUser?.center || "", selectedType, selectedCategory);
+      const response = await getPricing(currentUser?.center || "", token as string);
 
       if (response.ok) {
-        setPricing(response?.data);
+        setPricing(response.data);
       }
 
     } catch (error: any) {
@@ -63,7 +77,7 @@ export default function RegisterScreen() {
     } finally {
       setLoadingPricing(false);
     }
-  }, [currentUser?.center, failed, selectedCategory, selectedType]);
+  }, [currentUser?.center, failed, token]);
 
   useEffect(() => {
     fetchPricing();
@@ -88,6 +102,12 @@ export default function RegisterScreen() {
     }));
   };
 
+  const pricingOptions = pricing || [];
+
+  const getFilteredPricing = () => {
+    return pricingOptions.filter((p) => p.category === (formData?.category || ""));
+  };
+
   const togglePricingSelection = (pricingId: string) => {
     setFormData((prev: any) => {
       const currentPricing = prev?.pricing || [];
@@ -105,7 +125,7 @@ export default function RegisterScreen() {
     try {
       if (!formData?.type) return failed("Select account type");
       if (!formData?.pricing || formData.pricing.length === 0) return failed("Select at least one pricing plan");
-
+      
       const res = await register({
         fullname: (formData?.fullname || "").trim(),
         email: (formData?.email || "").trim(),
@@ -117,7 +137,15 @@ export default function RegisterScreen() {
         type: formData?.type,
         center: currentUser?.center || "",
         pricing: formData?.pricing || [],
-        category: formData?.category || "SMALL",
+        category: formData?.category,
+        company: currentUser?.company || "",
+        location: {
+          state: (formData?.location?.state || "").trim(),
+          city: (formData?.location?.city || "").trim(),
+          address: (formData?.location?.address || "").trim(),
+          zipcode: (formData?.location?.zipcode || "").trim(),
+          nearestBusStop: (formData?.location?.nearestBusStop || "").trim()
+        }
       });
 
       if (!res.ok) {
@@ -128,15 +156,21 @@ export default function RegisterScreen() {
           fullname: "",
           email: "",
           pricing: [],
-          businessName: "",
-          location: null,
+          businessName: "", 
+          location: {
+            state: "",
+            city: "",
+            address: "",
+            zipcode: "",
+            nearestBusStop: ""
+          },
           phone: "",
           center: "",
           agent: "",
           type: initialType as "BUSINESS" | "INDIVIDUAL",
-          category: initialCategory as "SMALL" | "MEDIUM" | "LARGE",
+          category: initialCategory,
         });
-        router.push("members" as RelativePathString);
+        router.push("/pages/(pages)/members" as RelativePathString);
       }
     } catch (error: any) {
       failed(error?.message || error?.error || "An error occurred during registration");
@@ -267,25 +301,26 @@ export default function RegisterScreen() {
                 </>
               )}
 
+              {/* pricing options will be filtered based on selected category, so we don't need to show category selection if there are no pricing options available */}
               <Text style={styles.label}>Subscription type (Select one or more)</Text>
               <View style={styles.typeWrap}>
                 {loadingPricing ? (
                   <ActivityIndicator size="large" color="#0ea360" />
                 ) : (
-                  pricing.map((bt) => (
+                  getFilteredPricing().map((bt) => (
                     <TouchableOpacity
                       key={bt.id}
                       style={[
                         styles.typeItem,
-                        formData?.pricing?.includes(bt.id)
+                        formData?.pricing?.includes(bt.id as string)
                           ? styles.typeItemSelected
                           : undefined,
                       ]}
                       activeOpacity={0.85}
-                      onPress={() => togglePricingSelection(bt.id)}
+                      onPress={() => togglePricingSelection(bt.id as string)}
                     >
                       <View style={styles.typeRadioOuter}>
-                        {formData?.pricing?.includes(bt.id) ? (
+                        {formData?.pricing?.includes(bt.id as string) ? (
                           <View style={styles.typeRadioInner} />
                         ) : null}
                       </View>
@@ -298,21 +333,40 @@ export default function RegisterScreen() {
                 )}
               </View>
 
+              <Text style={styles.label}>Address</Text>
+              <TextInput
+                value={formData?.location?.address}
+                onChangeText={(value) => updateField("location", { ...(formData?.location || {}), address: value })}
+                placeholder="Street address"
+                placeholderTextColor="#c7cbd0"
+                style={styles.input}
+              />
+
+              <Text style={styles.label}>Nearest bus stop</Text>
+              <TextInput
+                value={formData?.location?.nearestBusStop}
+                onChangeText={(value) => updateField("location", { ...(formData?.location || {}), nearestBusStop: value })}
+                placeholder="Nearest bus stop"
+                placeholderTextColor="#c7cbd0"
+                style={styles.input}
+              />
+
+
               <Text style={styles.label}>Category</Text>
-              <View style={styles.accountTypeRow}>
-                {["SMALL", "MEDIUM", "LARGE"].map((category) => (
+              <View style={styles.categoryWrap}>
+                {CATEGORY_OPTIONS.map((category) => (
                   <TouchableOpacity
-                    key={category}
+                    key={category.value}
                     style={[
-                      styles.accountTypeCard,
-                      formData?.category === category
-                        ? styles.accountTypeCardSelected
+                      styles.categoryCard,
+                      formData?.category === category.value
+                        ? styles.categoryCardSelected
                         : undefined,
                     ]}
                     activeOpacity={0.85}
-                    onPress={() => updateField("category", category)}
+                    onPress={() => updateField("category", category.value)}
                   >
-                    <Text style={styles.accountTypeTitle}>{category}</Text>
+                    <Text style={styles.categoryTitle}>{category.label}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -415,6 +469,27 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
   },
+  categoryWrap: {
+    gap: 10,
+    marginBottom: 12,
+  },
+  categoryCard: {
+    borderWidth: 1,
+    borderColor: "#e6e9eb",
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: "#fff",
+  },
+  categoryCardSelected: {
+    borderColor: "#0ea360",
+    backgroundColor: "#f2fbf7",
+  },
+  categoryTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1a202c",
+  },
   accountTypeCard: {
     flex: 1,
     borderWidth: 1,
@@ -424,7 +499,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
   },
   accountTypeCardSelected: {
     borderColor: "#0ea360",

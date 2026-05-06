@@ -21,7 +21,7 @@ model Member {
   type             BusinessType   @default(BUSINESS)
   billingFrequency BillingFrequency @default(MONTHLY)
   password         String
-  category         String @default("SMALL") 
+  category         String
   location         Json?
   status           Boolean  @default(true)
   avatar           String?
@@ -111,10 +111,9 @@ model Payment {
   id           String        @id @default(cuid())
   reference    String        @unique
   userId       String
-  businessName String
-  businessType String 
-  frequency    BillingFrequency
-  date         DateTime      @default(now())
+  frequency    BillingFrequency @default(MONTHLY)
+  sessions     String[]
+  debt         Float         @default(0)
   due          DateTime      @default(now())
   amount       Float
   payment      String
@@ -163,14 +162,12 @@ model Agent {
   center    String
   batchNo   String?
   company   String?
-  paystackCustomerId String?
-  paystackCustomerCode String?
   secureToken   String?
   role      Role     @default(ADMIN)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([uid, email, center, id, paystackCustomerId, paystackCustomerCode, secureToken, status])
+  @@index([uid, email, center, id, secureToken, status])
 }
 
 model Admin {
@@ -254,6 +251,7 @@ enum Role {
   AGENT
   COMPANY
   STAFF
+  MEMBER
 }
 
 enum NotificationType {

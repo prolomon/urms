@@ -13,6 +13,7 @@ import {
   changeMemberAgentSchema,
   changeMemberCompanySchema,
 } from "../validator/memberValidator.js";
+import { createPaymentRecord, generatePaymentReference } from "./paymentController.js";
 import { customAlphabet } from "nanoid";
 import { sendEmail } from "../service/mail.js";
 import { createCustomer, createAccount } from "../service/paystack.js";
@@ -23,6 +24,23 @@ import {
   resetCode,
   resetSuccessful,
 } from "../service/templates.js";
+
+const joseImport = () => import("jose");
+const jwtSecret = process.env.JWT_SECRET;
+const jwtExpiresIn = process.env.JWT_EXPIRES_IN || "3d";
+
+const generateAuthToken = async (payload) => {
+  if (!jwtSecret) {
+    throw new Error("JWT_SECRET is not configured");
+  }
+
+  const { SignJWT } = await joseImport();
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setIssuedAt()
+    .setExpirationTime(jwtExpiresIn)
+    .sign(new TextEncoder().encode(jwtSecret));
+};
 
 const memberSafeSelect = {
   id: true,
@@ -63,6 +81,21 @@ const generateMemberUidSuffix = customAlphabet(
 
 const random6Digit = () => {
   return String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0");
+};
+
+const findActivePricingForMember = async (pricingIds = []) => {
+  for (const pricingId of pricingIds) {
+    const pricing = await prisma.pricing.findUnique({
+      where: { id: pricingId },
+      select: { id: true, price: true, status: true },
+    });
+
+    if (pricing?.status) {
+      return pricing;
+    }
+  }
+
+  return null;
 };
 
 const createMember = async (req, res) => {
@@ -117,22 +150,49 @@ const createMember = async (req, res) => {
       });
     }
 
-    const member = await prisma.member.create({
-      data: {
-        fullname: value.fullname,
-        businessName: value.businessName,
-        center: value.center,
-        email: value.email,
-        phone: value.phone,
-        type: value.type || "BUSINESS",
-        password: hashedPassword,
-        location: value.location,
-        avatar: value.avatar,
-        agent: value.agent || null,
-        company: value.company || null,
-        uid: genUid,
-        pricing: value.pricing || [],
-      },
+    const selectedPricing = await findActivePricingForMember(value.pricing || []);
+
+    const { member, initialPayment } = await prisma.$transaction(async (tx) => {
+      const createdMember = await tx.member.create({
+        data: {
+          fullname: value.fullname,
+          businessName: value.businessName,
+          center: value.center,
+          email: value.email,
+          phone: value.phone,
+          type: value.type || "BUSINESS",
+          password: hashedPassword,
+          location: value.location,
+          avatar: value.avatar,
+          agent: value.agent || null,
+          company: value.company || null,
+          uid: genUid,
+          pricing: value.pricing || [],
+          category: value.category || null,
+        },
+      });
+
+      let createdPayment = null;
+
+      if (selectedPricing) {
+        createdPayment = await createPaymentRecord(
+          {
+            userId: createdMember.uid,
+            frequency: createdMember.billingFrequency,
+            sessions: [],
+            debt: 0,
+            due: new Date(),
+            amount: Number(selectedPricing.price),
+            payment: selectedPricing.id,
+            status: "PENDING",
+            isVerify: false,
+            reference: generatePaymentReference(),
+          },
+          tx,
+        );
+      }
+
+      return { member: createdMember, initialPayment: createdPayment };
     });
 
     if (!member) {
@@ -189,6 +249,7 @@ const createMember = async (req, res) => {
       message: "Member created successfully",
       member: memberWithoutPassword,
       welcomeNotification,
+      initialPayment,
     });
   } catch (err) {
     return res
@@ -441,6 +502,11 @@ const login = async (req, res) => {
       ok: true,
       message: "Login successful",
       member: memberWithoutPassword,
+      token: await generateAuthToken({
+        uid: member.uid,
+        email: member.email,
+        role: member.role,
+      }),
     });
   } catch (err) {
     console.error(err);

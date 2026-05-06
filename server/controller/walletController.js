@@ -65,7 +65,7 @@ const createWallet = async (req, res) => {
         data: {
           userId: id,
           accountNo: acc?.data?.bankAccountNumber,
-          role: "COMPANY",
+          role: role,
           bank: {
             name: acc?.data?.bankName,
             id: acc?.data?.accountRef || id,

@@ -1,13 +1,15 @@
 import { Payment, useAuth } from '@/hooks/use-auth';
 import { RelativePathString, useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function History() {
   const { payments } = useAuth();
   const [paymentList, setPaymentList] = useState<Payment[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const router = useRouter();
 
   const loadPayments = useCallback(async () => {
@@ -25,6 +27,19 @@ export default function History() {
   useEffect(() => {
     loadPayments();
   }, [loadPayments]);
+
+  const filteredPayments = useMemo(() => {
+    if (!fromDate && !toDate) return paymentList;
+    const from = fromDate ? new Date(fromDate) : null;
+    const to = toDate ? new Date(toDate) : null;
+    return paymentList.filter((p) => {
+      const d = p.date ? new Date(p.date) : null;
+      if (!d) return false;
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    });
+  }, [paymentList, fromDate, toDate]);
 
   return (
     <ScrollView
@@ -46,41 +61,42 @@ export default function History() {
 
       <View style={styles.searchWrap}>
         <TextInput placeholder="Search payments..." placeholderTextColor="#bfc7ca" style={styles.searchInput} />
+        <View style={styles.rangeRow}>
+          <TextInput placeholder="From (YYYY-MM-DD)" placeholderTextColor="#bfc7ca" style={styles.rangeInput} value={fromDate} onChangeText={setFromDate} />
+          <TextInput placeholder="To (YYYY-MM-DD)" placeholderTextColor="#bfc7ca" style={styles.rangeInput} value={toDate} onChangeText={setToDate} />
+        </View>
       </View>
 
-      <View style={styles.listWrap}>
-        {paymentList.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>You don&apos;t have any payment history</Text>
-          </View>
+      <View style={styles.historyWrap}>
+        {refreshing ? (
+          <Text style={styles.historyStateText}>Refreshing transactions...</Text>
+        ) : filteredPayments.length === 0 ? (
+          <Text style={styles.historyStateText}>No transactions found.</Text>
         ) : (
-          paymentList.map((tx) => {
+          filteredPayments.slice(0, 12).map((tx) => {
             const title = tx.businessName || 'Payment';
-            const subtitle = tx.frequency;
+            const subtitle = tx.frequency || tx.payment || '';
             const date = tx.date;
-            const rawStatus = tx.status;
+            const rawStatus = tx.status || '';
             const status = rawStatus === 'SUCCESS' ? 'Paid' : rawStatus === 'PENDING' ? 'Pending' : rawStatus === 'FAILED' ? 'Failed' : rawStatus;
-            const amount = `₦${tx.amount.toLocaleString()}`;
+            const amount = tx.amount ? `₦${Number(tx.amount).toLocaleString()}` : '-';
             const color = status === 'Paid' ? '#14a76a' : status === 'Pending' ? '#2266ff' : '#e94b4b';
 
             return (
               <TouchableOpacity
-                onPress={() => router.push(`/receipt/${tx.reference}` as RelativePathString)}
                 key={tx.reference}
-                style={[styles.txCard, { borderLeftColor: color }]}
+                style={styles.historyItem}
+                activeOpacity={0.8}
+                onPress={() => router.push(`/receipt/${tx.reference}` as RelativePathString)}
               >
-                <View style={styles.txContent}>
-                  <View style={styles.txTextLeft}>
-                    <Text style={styles.txTitle}>{title}</Text>
-                    <Text style={styles.txSubtitle}>{subtitle}</Text>
-                    <Text style={styles.txDate}>{new Date(date).toLocaleString()}</Text>
-                  </View>
-                  <View style={styles.txRight}>
-                    <Text style={[styles.txAmount, { color }]}>{amount}</Text>
-                    <View style={[styles.statusBadge, status === 'Paid' ? styles.badgePaid : status === 'Pending' ? styles.badgeCompleted : styles.badgePending]}>
-                      <Text style={styles.statusText}>{status}</Text>
-                    </View>
-                  </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.historyTitle}>{title}</Text>
+                  <Text style={styles.historySub}>{subtitle}</Text>
+                  <Text style={styles.historyDate}>{date ? new Date(date).toLocaleDateString() : '-'}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={styles.historyAmount}>{amount}</Text>
+                  <Text style={[styles.historyStatus, { color }]}>{status}</Text>
                 </View>
               </TouchableOpacity>
             );
@@ -102,23 +118,30 @@ const styles = StyleSheet.create({
 
   searchWrap: { paddingHorizontal: 14 },
   searchInput: { height: 44, borderRadius: 8, backgroundColor: '#fff', paddingHorizontal: 12, borderWidth: 1, borderColor: '#eceff0' },
+  rangeRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  rangeInput: { flex: 1, height: 40, borderRadius: 8, backgroundColor: '#fff', paddingHorizontal: 10, borderWidth: 1, borderColor: '#eceff0' },
 
-  listWrap: { marginTop: 16, paddingHorizontal: 10 },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
-  emptyText: { fontSize: 16, color: '#97a0a2', textAlign: 'center' },
-  txCard: { backgroundColor: '#f9fffb', borderRadius: 8, marginBottom: 12, padding: 12, borderLeftWidth: 6 },
-  txContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  txTextLeft: { flex: 1, paddingRight: 8 },
-  txTitle: { fontSize: 16 },
-  txSubtitle: { color: '#6f777a', marginTop: 6 },
-  txDate: { color: '#97a0a2', marginTop: 6 },
-
-  txRight: { alignItems: 'flex-end', minWidth: 90 },
-  txAmount: { fontSize: 15, fontWeight: '700' },
-
-  statusBadge: { marginTop: 8, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 },
-  badgePaid: { backgroundColor: '#e6fbf0' },
-  badgeCompleted: { backgroundColor: '#eaf0ff' },
-  badgePending: { backgroundColor: '#fdecec' },
-  statusText: { fontSize: 12 },
+  historyWrap: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e6f9f0',
+    padding: 12,
+    marginTop: 16,
+    paddingHorizontal: 14,
+  },
+  historyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  historyTitle: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
+  historySub: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  historyDate: { fontSize: 11, color: '#94a3b8', marginTop: 3 },
+  historyAmount: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
+  historyStatus: { marginTop: 4, fontSize: 12, fontWeight: '700' },
+  historyStateText: { fontSize: 13, color: '#64748b', textAlign: 'center', paddingVertical: 16 },
 });

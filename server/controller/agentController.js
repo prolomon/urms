@@ -40,7 +40,7 @@ const generateAuthToken = async (payload) => {
     .setIssuedAt()
     .setExpirationTime(jwtExpiresIn)
     .sign(new TextEncoder().encode(jwtSecret));
-};
+}; 
 
 const looksLikeJwt = (value) =>
   typeof value === "string" && value.split(".").length === 3;
@@ -323,6 +323,7 @@ const getAgentList = async (req, res) => {
         role: true,
         createdAt: true,
         updatedAt: true,
+        company: true,
       },
     });
 
@@ -356,6 +357,7 @@ const getAgent = async (req, res) => {
         role: true,
         createdAt: true,
         updatedAt: true,
+        company: true,
       },
     });
     if (!agent)
@@ -386,6 +388,7 @@ const getAgentById = async (req, res) => {
         role: true,
         createdAt: true,
         updatedAt: true,
+        company: true,
       },
     });
     if (!agent)
@@ -478,8 +481,7 @@ const loginAgent = async (req, res) => {
         role: true,
         createdAt: true,
         updatedAt: true,
-        paystackCustomerId: true,
-        paystackCustomerCode: true,
+        company: true,
       },
     });
 
@@ -531,7 +533,7 @@ const loginAgent = async (req, res) => {
         uid: agent.uid,
         email: agent.email,
         role: agent.role,
-      }),
+      }), 
     });
   } catch (err) {
     console.error(err);

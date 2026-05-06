@@ -8,31 +8,19 @@ const createPaymentSchema = Joi.object({
     'string.base': 'User ID must be a string',
     'any.required': 'User ID is required',
   }),
-  businessName: Joi.string().trim().min(1).max(200).required().messages({
-    'string.base': 'Business name must be a string',
-    'string.min': 'Business name must be at least 1 character long',
-    'string.max': 'Business name must be at most 200 characters long',
-    'any.required': 'Business name is required',
+  sessions: Joi.array().items(Joi.string().trim()).optional().default([]).messages({
+    'array.base': 'Sessions must be an array',
   }),
-  businessType: Joi.string()
-    .required()
-    .messages({
-      'string.base': 'Business type must be a string',
-      'any.only': 'Business type must be valid',
-      'any.required': 'Business type is required',
-    }),
   frequency: Joi.string()
     .uppercase()
     .valid('MONTHLY', 'YEARLY', 'QUARTERLY')
+    .default('MONTHLY')
     .required()
     .messages({
       'string.base': 'Frequency must be a string',
       'any.only': 'Frequency must be one of MONTHLY, YEARLY, or QUARTERLY',
       'any.required': 'Frequency is required',
     }),
-  date: Joi.date().optional().messages({
-    'date.base': 'Date must be a valid date',
-  }),
   due: Joi.date().optional().messages({
     'date.base': 'Due date must be a valid date',
   }),
@@ -40,6 +28,10 @@ const createPaymentSchema = Joi.object({
     'number.base': 'Amount must be a number',
     'number.min': 'Amount must be at least 0',
     'any.required': 'Amount is required',
+  }),
+  debt: Joi.number().min(0).optional().default(0).messages({
+    'number.base': 'Debt must be a number',
+    'number.min': 'Debt must be at least 0',
   }),
   payment: Joi.string()
     .required()
@@ -57,6 +49,47 @@ const createPaymentSchema = Joi.object({
       'string.base': 'Status must be a string',
       'any.only': 'Status must be one of PENDING, COMPLETED, FAILED, CANCELLED, or REFUNDED',
     }),
+    isVerify: Joi.boolean().optional().default(false),
 });
 
-export { createPaymentSchema };
+  const verifyPaymentSchema = Joi.object({
+    amountPaid: Joi.number().min(0).optional().messages({
+      'number.base': 'Amount paid must be a number',
+      'number.min': 'Amount paid must be at least 0',
+    }),
+    session: Joi.alternatives()
+      .try(Joi.string().trim(), Joi.array().items(Joi.string().trim()))
+      .optional()
+      .messages({
+        'alternatives.match': 'Session must be a string or array of strings',
+      }),
+    sessions: Joi.alternatives()
+      .try(Joi.string().trim(), Joi.array().items(Joi.string().trim()))
+      .optional()
+      .messages({
+        'alternatives.match': 'Sessions must be a string or array of strings',
+      }),
+  });
+
+  const updatePaymentScheduleSchema = Joi.object({
+    frequency: Joi.string()
+      .uppercase()
+      .valid('MONTHLY', 'YEARLY', 'QUARTERLY')
+      .required()
+      .messages({
+        'string.base': 'Frequency must be a string',
+        'any.only': 'Frequency must be one of MONTHLY, YEARLY, or QUARTERLY',
+        'any.required': 'Frequency is required',
+      }),
+    amount: Joi.number().min(0).required().messages({
+      'number.base': 'Amount must be a number',
+      'number.min': 'Amount must be at least 0',
+      'any.required': 'Amount is required',
+    }),
+    due: Joi.date().required().messages({
+      'date.base': 'Due date must be a valid date',
+      'any.required': 'Due date is required',
+    }),
+  });
+
+  export { createPaymentSchema, verifyPaymentSchema, updatePaymentScheduleSchema };

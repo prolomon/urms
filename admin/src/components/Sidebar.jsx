@@ -17,7 +17,7 @@ import { usePathname } from "next/navigation";
 export default function Sidebar({ onClose }) {
   const pathname = usePathname();
 
-  const partner = pathname.includes("/partner");
+  const partner = pathname.split("/")[1] === "partner";
 
   let navItems;
 

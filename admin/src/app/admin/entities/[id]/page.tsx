@@ -179,7 +179,8 @@ export default function EntityDetailsPage({ params }) {
 
     try {
       setAgentLoading(true);
-      const res = await getAgents(member?.uid || user.uid);
+      const centerId = member?.company || user?.uid;
+      const res = await getAgents(centerId);
       const allAgents = res?.data || [];
       setAgents(allAgents);
 
@@ -196,7 +197,7 @@ export default function EntityDetailsPage({ params }) {
     } finally {
       setAgentLoading(false);
     }
-  }, [member.agent, member?.uid, user.uid]);
+  }, [member?.agent, member?.company, user?.uid]);
 
   const fetchCompanyData = useCallback(async () => {
     if (!user?.uid) {

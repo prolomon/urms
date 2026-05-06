@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/context/AuthContext";
+import { usePartner } from "@/context/PartnerContext";
 import { Member, createMember } from "@/lib/services/member";
 import { getCompanies, Company } from "@/lib/services/company";
 import { getPricingByCenter, Pricing } from "@/lib/services/pricing";
@@ -22,8 +22,8 @@ import statesData from "@/lib/jsons/state_and_lgas.json";
 
 export default function AddEntityPage() {
     const router = useRouter();
-    const { uid, user } = useAuth();
-    const centerId = user?.uid || uid || "";
+    const { uid, user } = usePartner();
+    const centerId = user?.center || uid || "";
     const adminState = user?.state || "";
     const adminLga = user?.lga || "";
 
@@ -39,8 +39,6 @@ export default function AddEntityPage() {
         category: "",
     });
 
-    const [companies, setCompanies] = useState<Company[]>([]);
-    const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
     const [pricingOptions, setPricingOptions] = useState<Pricing[]>([]);
     const [locationSuggestions, setLocationSuggestions] = useState<
         Array<{ id: string | number; name: string; display_name?: string }>
@@ -77,14 +75,10 @@ export default function AddEntityPage() {
         const loadData = async () => {
             setLoading(true);
             try {
-                const [companiesRes, pricingRes] = await Promise.all([
-                    getCompanies(centerId),
+                const [ pricingRes] = await Promise.all([
                     getPricingByCenter(centerId),
                 ]);
 
-                const companyList = Array.isArray(companiesRes?.data) ? companiesRes.data : [];
-                setCompanies(companyList);
-                setSelectedCompany(null);
                 setPricingOptions(
                     Array.isArray(pricingRes?.data) ? pricingRes.data : []
                 );
@@ -224,10 +218,6 @@ export default function AddEntityPage() {
             addToast("error", "Category is required");
             return false;
         }
-        if (!selectedCompany?.uid) {
-            addToast("error", "Please select a company");
-            return false;
-        }
         return true;
     };
 
@@ -251,9 +241,9 @@ export default function AddEntityPage() {
 
             const payload = {
                 ...formData,
-                center: centerId,
+                center: user.center,
                 location: finalLocation,
-                company: selectedCompany?.uid || "",
+                company: user?.uid || "",
             };
 
             const res = await createMember(payload as Member);
@@ -264,7 +254,7 @@ export default function AddEntityPage() {
 
             addToast("success", "Entity created successfully");
             setTimeout(() => {
-                router.push("/admin/entities");
+                router.push("/partner/entities");
             }, 1500);
         } catch (e) {
             console.error("Error creating entity:", e);
@@ -472,77 +462,6 @@ export default function AddEntityPage() {
                                 </div>
                             )}
                         </div>
-                    </div>
-
-                    <hr className="border-b border-slate-200" />
-
-                    {/* Section 3: Company Selection */}
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between gap-3">
-                            <div>
-                                <h2 className="text-lg font-semibold text-slate-900">
-                                    Company Selection
-                                </h2>
-                                <p className="mt-1 text-sm text-slate-600">
-                                    Select the company this member belongs to.
-                                </p>
-                            </div>
-                            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                                {selectedCompany?.uid ? `Selected: ${selectedCompany.name}` : "Select one company"}
-                            </span>
-                        </div>
-
-                        {companies.length > 0 ? (
-                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                                {companies.map((company) => {
-                                    const isSelected = selectedCompany?.uid === company.uid;
-
-                                    return (
-                                        <button
-                                            key={company.uid || company.id}
-                                            type="button"
-                                            onClick={() => setSelectedCompany(company)}
-                                            className={`rounded-2xl border p-4 text-left transition-all ${isSelected
-                                                ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-100"
-                                                : "border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50"
-                                                }`}
-                                        >
-                                            <div className="flex items-start gap-3">
-                                                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${isSelected ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"
-                                                    }`}>
-                                                    <Building2 size={18} />
-                                                </div>
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex items-center justify-between gap-3">
-                                                        <p className="truncate text-sm font-semibold text-slate-900">
-                                                            {company.name || "Untitled Company"}
-                                                        </p>
-                                                        {isSelected && (
-                                                            <span className="rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
-                                                                Selected
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <p className="mt-1 text-xs text-slate-500">
-                                                        {company.uid || company.id}
-                                                    </p>
-                                                    <p className="mt-2 text-xs text-slate-600">
-                                                        {company.email || "No email available"}
-                                                    </p>
-                                                    <p className="mt-1 text-xs text-slate-600">
-                                                        {company.phone || "No phone available"}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        ) : (
-                            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
-                                No companies found for this center.
-                            </div>
-                        )}
                     </div>
 
                     <hr className="border-b border-slate-200" />

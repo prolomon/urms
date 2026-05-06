@@ -31,6 +31,7 @@ export default function BillingSettings() {
   const [loadingPricing, setLoadingPricing] = useState(true);
   const [loadingPayments, setLoadingPayments] = useState(true);
   const [lastPaymentDue, setLastPaymentDue] = useState<Date | null>(null);
+  const [paymentsList, setPaymentsList] = useState<any[]>([]);
 
   useEffect(() => {
     const run = async () => {
@@ -57,6 +58,7 @@ export default function BillingSettings() {
     try {
       setLoadingPayments(true);
       const list = (await payments?.()) || [];
+      setPaymentsList(Array.isArray(list) ? list : []);
       if (Array.isArray(list) && list.length > 0) {
         const latest = list.reduce((latest, payment) => {
           const dueDate = new Date(payment.due || payment.date);
@@ -76,7 +78,7 @@ export default function BillingSettings() {
   };
 
   const currentPlanPrice =
-    pricing.find((t) => t.id === currentUser?.businessType)?.price || "15000";
+    pricing.find((t) => t.id === currentUser?.type)?.price || "15000";
 
   const frequencyList = [
     {
@@ -145,7 +147,33 @@ export default function BillingSettings() {
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchPricing();
+    await fetchPaymentHistory();
     setRefreshing(false);
+  };
+
+  const handlePaymentFrequencyChange = (ref: string | undefined, newFreq: "MONTHLY" | "QUARTERLY" | "YEARLY") => {
+    setPaymentsList((prev) =>
+      prev.map((p) => (p.reference === ref ? { ...p, selectedFrequency: newFreq } : p)),
+    );
+  };
+
+  const computePaymentAmount = (baseAmount: number | string | undefined, freqKey: string) => {
+    const multiplier = frequencyList.find((f) => f.key.toUpperCase() === freqKey.toUpperCase())?.multiplier || 1;
+    const amt = Number(baseAmount) || Number(currentPlanPrice) || 15000;
+    return (amt * multiplier).toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 });
+  };
+
+  const computePaymentDue = (baseDate: string | Date | undefined, freqKey: string) => {
+    const base = baseDate ? new Date(baseDate) : new Date();
+    const days = frequencyDays[freqKey?.toUpperCase() ?? "MONTHLY"] || 30;
+    const d = new Date(base);
+    d.setDate(d.getDate() + days);
+    return d.toLocaleDateString("en-NG", { year: "numeric", month: "long", day: "numeric" });
+  };
+
+  const handleApplyFrequency = async (payment: any) => {
+    // placeholder: implement API call to update payment frequency if needed
+    success("Frequency applied (local preview only)");
   };
 
   return (
@@ -178,15 +206,15 @@ export default function BillingSettings() {
         <View style={styles.currentPlan}>
           {loadingPricing ? (
             <ActivityIndicator size="small" color="#0ea360" />
-          ) : pricing.find((t) => t.id === currentUser?.businessType) ? (
+          ) : pricing.find((t) => t.id === currentUser?.type) ? (
             <>
               <Text style={styles.planName}>
-                {pricing.find((t) => t.id === currentUser?.businessType)?.title}
+                {pricing.find((t) => t.id === currentUser?.type)?.title}
               </Text>
               <Text style={styles.planPrice}>
                 ₦
                 {Number(
-                  pricing.find((t) => t.id === currentUser?.businessType)
+                  pricing.find((t) => t.id === currentUser?.type)
                     ?.price,
                 ).toLocaleString("en-NG")}
                 /month
@@ -264,6 +292,48 @@ export default function BillingSettings() {
             />
           </TouchableOpacity>
         </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Your Payments</Text>
+        {loadingPayments ? (
+          <ActivityIndicator size="small" color="#0ea360" />
+        ) : paymentsList.length === 0 ? (
+          <Text style={styles.emptyText}>No payments available</Text>
+        ) : (
+          paymentsList.map((p) => {
+            const selFreq = (p.selectedFrequency || p.frequency || frequency || "MONTHLY").toUpperCase();
+            const computedAmount = computePaymentAmount(p.amount, selFreq);
+            const computedDue = computePaymentDue(p.due || p.date, selFreq);
+            return (
+              <View key={p.reference || p.id} style={styles.payCard}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.payTitle}>{p.businessName || p.reference}</Text>
+                  <Text style={styles.paySub}>{p.payment || p.frequency}</Text>
+                  <Text style={styles.payDate}>{computedDue}</Text>
+                </View>
+
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={styles.payAmount}>{computedAmount}</Text>
+                  <View style={{ flexDirection: 'row', marginTop: 8 }}>
+                    {frequencyList.map((f) => (
+                      <TouchableOpacity
+                        key={f.key}
+                        style={[styles.freqBtn, selFreq === f.key.toUpperCase() ? styles.freqBtnActive : undefined]}
+                        onPress={() => handlePaymentFrequencyChange(p.reference, f.key.toUpperCase() as any)}
+                      >
+                        <Text style={[styles.freqText, selFreq === f.key.toUpperCase() ? styles.freqTextActive : undefined]}>{f.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TouchableOpacity style={[styles.primaryBtn, { marginTop: 8 }]} onPress={() => handleApplyFrequency(p)}>
+                    <Text style={styles.primaryText}>Apply</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })
+        )}
       </View>
 
       <View style={styles.noteCard}>
@@ -434,4 +504,16 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   saveText: { color: "#fff" },
+  emptyText: { color: '#64748b', textAlign: 'center', paddingVertical: 12 },
+  payCard: { backgroundColor: '#fff', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#eef2f3', flexDirection: 'row', alignItems: 'center', marginTop: 12 },
+  payTitle: { fontSize: 15, fontWeight: '700' },
+  paySub: { color: '#64748b', marginTop: 4 },
+  payDate: { color: '#94a3b8', marginTop: 6, fontSize: 12 },
+  payAmount: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
+  freqBtn: { paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#e6e9eb', backgroundColor: '#fff', marginLeft: 6 },
+  freqBtnActive: { backgroundColor: '#f2fbf7', borderColor: '#0ea360' },
+  freqText: { fontSize: 12, color: '#334155' },
+  freqTextActive: { color: '#0ea360', fontWeight: '700' },
+  primaryBtn: { marginTop: 8, backgroundColor: '#0ea360', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  primaryText: { color: '#fff', fontWeight: '700' },
 });

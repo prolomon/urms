@@ -6,49 +6,51 @@ export type BusinessType = {
   benefit: string;
 };
 
-export type Wallet = {
-  id: string;
-  memberId: string;
-  adminId: string;
-  balance: number;
-  accountNo: string;
-  accountName: string;
-  currency: string;
-  bank: {
-    id: string;
-    name: string;
-  };
-  identification?: "NIN" | "BVN" | "RC" | "TIN";
-  createdAt: string;
-  updatedAt: string;
-  status: boolean;
-  verify: boolean;
-  paystackCustomerCode: string;
-  paystackCustomerId: string;
-};
-
 export type Frequency = "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY" | "QUARTERLY";
 
-export type User = {
+export type Agent = {
+  id?: string;
   uid?: string;
-  fullname?: string;
-  email?: string;
-  phone?: string;
+  name?: string;
+  fullname: string;
+  email: string;
+  phone: string;
+  gender: string;
+  status?: boolean;
   password?: string;
   location?: string;
   avatar?: string;
-  id?: string;
-  gender?: string;
-  status?: string;
   center?: string;
-  batchNo?: string;
-  paystackCustomerId?: string;
-  paystackCustomerCode?: string;
+  company: string;
+  batchNo: string;
+  zone?: string;
   secureToken?: string;
   role?: "AGENT";
-  createdAt?: string;
-  updatedAt?: string;
-};
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export type User = {
+  id?: string;
+  uid?: string;
+  name?: string;
+  fullname: string;
+  email: string;
+  phone: string;
+  gender: string;
+  status?: boolean;
+  password?: string;
+  location?: string;
+  avatar?: string;
+  center?: string;
+  company: string;
+  batchNo: string;
+  zone?: string;
+  secureToken?: string;
+  role?: "AGENT";
+  createdAt?: Date;
+  updatedAt?: Date;
+}
 
 export type Notification = {
   title: string;
@@ -67,8 +69,6 @@ export type Notification = {
 export type Payment = {
   reference: string;
   userId: string;
-  businessName: string;
-  businessType: BusinessType;
   frequency: Frequency;
   date: string;
   amount: number;
@@ -76,6 +76,10 @@ export type Payment = {
   status: "PENDING" | "SUCCESS" | "FAILED" | "CANCELLED" | "REFUNDED";
   due: Date | null;
   isVerified: boolean;
+  sessions:     string[];
+  debt: number;      
+  createdAt?: Date;
+  updatedAt?: Date;
 };
 
 export type Member = {
@@ -83,20 +87,25 @@ export type Member = {
   uid?: string;
   fullname: string;
   businessName?: string;
-  center: string;
+  center?: string;
   email: string;
   phone: string;
   type: "BUSINESS" | "INDIVIDUAL";
-  category: "SMALL" | "MEDIUM" | "LARGE"
+  category: string;
+  company?: string;
   billingFrequency?: Frequency;
   password?: string;
-  location?: Record<string, any> | null;
+  location?: {
+    state: string;
+    city: string;
+    address: string;
+    zipcode: string;
+    nearestBusStop: string;
+  };
   status?: boolean;
   avatar?: string;
-  paystackCustomerId?: string;
-  paystackCustomerCode?: string;
   secureToken?: string;
-  pricing: string[];
+  pricing?: string[];
   role?: "USER" | "ADMIN";
   createdAt?: string;
   updatedAt?: string;
@@ -104,12 +113,8 @@ export type Member = {
 };
 
 export type AuthContextValue = {
-  currentUser: User | null;
+  currentUser: Member | null;
   loading: boolean;
-  register: (user: Omit<Member, "uid" | "role" | "createdAt">) => Promise<{
-    message: string;
-    ok: boolean;
-  }>;
   login: (
     uid: string,
     password: string,
@@ -120,10 +125,6 @@ export type AuthContextValue = {
     token?: string;
   }>;
   logout: () => Promise<void>;
-  updateProfile: (
-    updates: Partial<User>,
-    token?: string,
-  ) => Promise<{ ok: boolean; message?: string; error?: string }>;
   forgot: (
     uid: string,
     password: string,
@@ -146,7 +147,7 @@ export type AuthContextValue = {
     message?: string;
   }>;
   wallet: Wallet | null;
-  token?: string;
+  token: string;
   createCode: (
     secureToken: string,
     confirmSecureToken: string,
@@ -159,24 +160,22 @@ export type AuthContextValue = {
   verifyCode: (
     secureToken: string,
   ) => Promise<{ ok: boolean; message?: string; error?: string }>;
+  uid?: string;
 };
-
-enum PricingType {
-  INDIVIDUAL,
-  BUSINESS,
-}
 
 export type Pricing = {
-  status: boolean;
-  id: string;
+  status?: boolean;
+  id?: string;
   title: string;
   price: string;
-  type: PricingType;
-  benefit: string | null;
-  center: string | null;
-  createdAt: string;
-  updatedAt: string;
+  category: string;
+  type: string;
+  benefit: string;
+  center?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
+
 
 enum TransactionStatus {
   PENDING,
@@ -186,22 +185,60 @@ enum TransactionStatus {
   CANCELLED,
 }
 
+export type Wallet = {
+  id: string;
+  userId?: string;
+  role: "MEMBER" | "ADMIN" | "AGENT" | "PARTNER" | "STAFF";
+  balance?: number;
+  accountNo?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+  status?: boolean;
+  accountName: string;
+  currency: string;
+  bank: {
+    id: string;
+    name: string;
+  };
+  identification?: "NIN" | "BVN";
+  verify?: boolean;
+};
+
 export type Transaction = {
   id: string;
-  reference: string;
-  event: string;
-  status: TransactionStatus;
-  amount: number;
+  status: string;
+  amount: string;
+  fixedCharge: string;
+  source: string;
+  type: string;
+  customerBillerId: string;
+  timeCreated: string;
+  timeUpdated: string;
+  posTid: string;
+  posSerialNumber: string;
+  walletCurrency: string;
+  walletBalance: string;
+  billingVendorReference: string;
+  paymentVendorReference: string;
+  userId: string;
+  ktaSenderName: string;
+  ktaSenderAccountNumber: string;
+  ktaSenderBankCode: string;
+  recipientAccountNumber: string;
+  recipientAccountType: string;
+  senderName: string;
   currency: string;
-  channel: string | null;
-  gatewayResponse: string | null;
-  customerEmail: string | null;
-  paymentReference: string | null;
-  userId: string | null;
-  metadata: Record<string, unknown> | null;
-  rawPayload: Record<string, unknown> | null;
-  createdAt: string;
-  updatedAt: string;
-  
-  payment: Payment[];
-} 
+  bankCode: string;
+  productId: string;
+  isAgentTransaction: true;
+  isInternational: boolean;
+  customerCommission: string;
+  recipientAccountName: string;
+  sessionId: string;
+  accountNumber: string;
+  bankName: string;
+  entryType: string;
+  transactionCategory: string;
+  narration: string;
+  receiptTerminalId: string;
+};

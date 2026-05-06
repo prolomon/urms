@@ -1,72 +1,67 @@
 import { API_URL, buildHeaders } from "@/lib/api";
-import { Wallet } from "../types";
+import { Wallet, } from "../types";
 
-export async function createWallet( customerCode: string, id: string, accountType: string, token: string ): Promise<{ ok: boolean; wallet?: Wallet; message?: string }> {
+export async function createWallet(
+  name: string,
+  bvn: string,
+  role: string,
+  id: string,
+  token: string,
+): Promise<{ ok: boolean; admin?: Wallet; message?: string }> {
   const response = await fetch(`${API_URL}/wallet`, {
     method: "POST",
-    headers: { ...buildHeaders(true, token) },
-    body: JSON.stringify({ customerCode, id, accountType }),
+    headers: { ...buildHeaders(true, token  ) },
+    body: JSON.stringify({ name, bvn, role, id }),
   });
 
   if (!response.ok) {
     const errorData = await response.json();
 
-    throw new Error(errorData.message || "Failed to create wallet");
+    throw new Error(errorData.message || "Failed to create admin");
   }
   const data = await response.json();
   return data;
 }
 
-export const getWallet = async ( id: string, token: string ): Promise<{wallet: Wallet | null, isExist: boolean, ok: boolean, message: string}> => {
-  try {
-    if (!id) return { wallet: null, isExist: false, ok: false, message: "Invalid wallet ID" };
-
-    const response = await fetch(`${API_URL}/wallet/agent/${id}`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    if (!response.ok) {
-      return { wallet: null, isExist: false, ok: false, message: "Failed to fetch wallet" };
-    }
-
-    const data = await response.json();
-
-    return data || { wallet: null, isExist: false, ok: false, message: "Wallet not found" };
-  } catch (e: any) {
-    return { wallet: null, isExist: false, ok: false, message: e?.message || "Failed to fetch wallet" };
-  }
-};
-
-export async function validateWallet( bvn: string, customerCode: string, type: "NIN" | "BVN" | "RC" | "TIN", token: string, id: string ) {
-  const response = await fetch(`${API_URL}/wallet/${id}/validate-ownership`, {
-    method: "POST",
-    headers: { ...buildHeaders(true, token) },
-    body: JSON.stringify({ customerCode, bvn, type }),
+export async function getWallet(
+  id: string,
+  role: "MEMBER" | "ADMIN" | "AGENT" | "COMPANY" | "STAFF",
+  token: string,
+): Promise<{
+  ok: boolean;
+  wallet?: Wallet;
+  message?: string;
+  isExist?: boolean;
+}> {
+  const response = await fetch(`${API_URL}/wallet/${id}/${role}`, {
+    headers: { ...buildHeaders(true, token  ) },
   });
-
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.message || "Failed to validate wallet");
-  }
-
   const data = await response.json();
   return data;
 }
 
 export async function initiateTransfer(
-  amount: number,
-  recipientCode: string,
-  reason: string,
-  token?: string
+  amount: string,
+  accountNumber: string,
+  accountName: string,
+  bankCode: string,
+  merchantTxRef: string,
+  senderName: string,
+  narration: string,
+  token: string
 ) {
   const response = await fetch(`${API_URL}/wallet/transfer/initiate`, {
     method: "POST",
-    headers: { ...buildHeaders(true, token) },
-    body: JSON.stringify({ amount, recipientCode, reason }),
+    headers: { ...buildHeaders(true, token  ) },
+    body: JSON.stringify({
+      amount,
+      accountNumber,
+      accountName,
+      bankCode,
+      merchantTxRef,
+      senderName,
+      narration,
+    }),
   });
 
   if (!response.ok) {
@@ -77,37 +72,49 @@ export async function initiateTransfer(
   return data;
 }
 
-export async function createRecipient(
-  name: string,
+export async function resolveBankAccount(
   accountNumber: string,
   bankCode: string,
-  token?: string
-) {
-  const response = await fetch(`${API_URL}/wallet/transfer/recipient`, {
+  token: string
+): Promise<{ accountName: string; accountNumber: string }> {
+  const response = await fetch(`${API_URL}/wallet/resolve-bank-account`, {
     method: "POST",
-    headers: { ...buildHeaders(true, token) },
-    body: JSON.stringify({ name, accountNumber, bankCode }),
+    headers: { ...buildHeaders(true, token  ) },
+    body: JSON.stringify({ accountNumber, bankCode }),
   });
 
   if (!response.ok) {
     const errorData = await response.json();
-    throw new Error(errorData.message || "Failed to create recipient");
+    throw new Error(errorData.message || "Failed to resolve bank account");
   }
-
   const data = await response.json();
   return data;
 }
 
-export async function resolveBankAccount(accountNumber: string, bankCode: string, token?: string) {
-  const response = await fetch(`${API_URL}/wallet/resolve-bank-account`, {
+export async function getBanks(token: string): Promise<{ ok: boolean; banks?: { name: string; code: string }[]; message?: string }> {
+  const response = await fetch(`${API_URL}/banks`, {
+    headers: { ...buildHeaders(true, token  ) },
+  });
+  const data = await response.json();
+  return data;
+}
+
+export async function getTransactions(
+  accountNumber: string,
+  fromDate: string,
+  toDate: string,
+  token: string
+): Promise<{ ok: boolean; transactions?: Wallet; message?: string }> {
+  const response = await fetch(`${API_URL}/wallet/transactions`, {
     method: "POST",
-    headers: { ...buildHeaders(true, token) },
-    body: JSON.stringify({ accountNumber, bankCode }),
+    headers: { ...buildHeaders(true, token ) },
+    body: JSON.stringify({ accountNumber, fromDate, toDate }),
   });
 
-    if (!response.ok) {
+  if (!response.ok) {
     const errorData = await response.json();
-    throw new Error(errorData.message || "Failed to resolve bank account");
+
+    throw new Error(errorData.message || "Failed to create admin");
   }
   const data = await response.json();
   return data;

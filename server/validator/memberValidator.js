@@ -46,7 +46,7 @@ const createMemberSchema = Joi.object({
       "any.only":
         "Billing frequency must be one of MONTHLY, YEARLY, or QUARTERLY",
     }),
-  category: Joi.string().trim().max(100).optional().default("SMALL").messages({
+  category: Joi.string().trim().max(100).messages({
     "string.base": "Category must be a string",
     "string.max": "Category must be at most 100 characters long",
   }),

@@ -25,7 +25,7 @@ export default function CompleteProfileScreen() {
     setUid(user?.uid || null);
 
     if (wallet) {
-      router.replace("/partner/wallet");
+      router.replace("/admin/wallet");
     }
   }, [router, wallet, setUid, user?.uid])
 
@@ -113,7 +113,7 @@ export default function CompleteProfileScreen() {
       }
 
       success(res.message || "Security code set successfully");
-      router.replace("/partner/wallet");
+      router.replace("/admin/wallet");
     } catch (e: any) {
       console.log(e);
       failed(e?.message || e?.error || "An error occurred while setting security code");

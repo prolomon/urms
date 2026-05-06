@@ -23,8 +23,7 @@ function normalizeUser(user: any): User {
     status: user?.status,
     center: user?.center,
     batchNo: user?.batchNo,
-    paystackCustomerId: user?.paystackCustomerId,
-    paystackCustomerCode: user?.paystackCustomerCode,
+    company: user?.company,
   };
 }
 
@@ -66,7 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
         body: JSON.stringify(user),
       });
-
+      
       if (!response.ok) {
         const error = await response.json();
         return { ok: false, message: error.message || "Registration failed" };
@@ -281,7 +280,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const verifyPayment = async (reference: string) => {
+  const verifyPayment = async ({reference, session}: { reference: string; session: string }) => {
     try {
       if (!currentUser) return {
         ok: false,
@@ -309,6 +308,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             Authorization: `Bearer ${currentUser.uid || ""}`,
             "x-user-id": currentUser.uid,
           },
+          body: JSON.stringify({ session }),
         },
       );
 
