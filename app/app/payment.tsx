@@ -133,8 +133,8 @@ export default function MakePayment() {
                 currentUser.uid,
                 Number(paymentAmount),
                 selectedPayment?.payment as string,
-                currentUser.center as string, 
-                currentUser.company as string, 
+                currentUser.center as string,
+                currentUser.company as string,
                 token as string
             );
 
@@ -149,7 +149,7 @@ export default function MakePayment() {
             setPaymentAmount("");
             setSelectedPayment(null);
             fetchPayments();
-            
+
         } catch (error: any) {
             setError(error?.message || "An error occurred during verification");
             failed(error?.message || "An error occurred during verification");
@@ -207,64 +207,64 @@ export default function MakePayment() {
                         {sortedPayments.map((payment, index) => {
 
                             const pricingInfo = pricing.find((item) => item.id === payment.payment)
+                            const isPayable = payment.status.toLowerCase() !== "success" && Number(payment.debt) > 0;
+                            const statusLabel = payment.status.charAt(0).toUpperCase() + payment.status.slice(1).toLowerCase();
 
                             return (
                                 <View
                                     key={payment.reference || `${payment.userId}-${index}`}
                                     style={styles.paymentCard}
                                 >
-                                    <View style={{ flex: 1 }}>
-                                        {pricingInfo?.title ? (
-                                            <Text style={[styles.paymentMeta, { fontSize: 16, fontWeight: "700", color: "#0f172a" }]}>
-                                                Plan: {pricingInfo.title}
+                                    <View style={styles.cardTopRow}>
+                                        <View style={{ flex: 1, paddingRight: 12 }}>
+                                            <Text style={styles.planLabel} numberOfLines={1}>
+                                                {pricingInfo?.title || "Payment"}
                                             </Text>
-                                        ) : null}
-                                        {pricingInfo?.category ? (
+                                            {pricingInfo?.category ? (
+                                                <Text style={styles.paymentMeta} numberOfLines={1}>
+                                                    {pricingInfo.category}
+                                                </Text>
+                                            ) : null}
                                             <Text style={styles.paymentMeta}>
-                                                Category: {pricingInfo.category}
+                                                Due {formatDate(payment.due)}
                                             </Text>
-                                        ) : null}
-                                        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                                            <Text style={styles.paymentMeta}>
-                                                Due: {formatDate(payment.due)}
+                                        </View>
+
+                                        <View style={[styles.statusBadge, payment.status.toLowerCase() === "success" ? styles.statusSuccess : styles.statusPending]}>
+                                            <Text style={[styles.statusText, payment.status.toLowerCase() === "success" ? styles.statusTextSuccess : styles.statusTextPending]}>
+                                                {statusLabel}
                                             </Text>
-                                            <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8, gap: 8 }}>
-                                                <View style={[styles.statusBadge, { backgroundColor: "#f0fdf4" }]}>
-                                                    <Text style={{ fontSize: 11, color: "#166534", fontWeight: "700" }}>
-                                                        {payment.status}
-                                                    </Text>
-                                                </View>
-                                            </View>
                                         </View>
                                     </View>
 
-                                    <View style={{ gap: 8 }}>
-                                        <View style={{ flexDirection: "row", alignItems: "center", gap: "4%", marginTop: 10, marginBottom: 6 }}>
-                                            <View style={[styles.amountBadge, { width: "48%" }]}>
-                                                <Text style={styles.amountLabel}>Amount</Text>
-                                                <Text style={styles.amountValue}>
-                                                    {formatAmount(Number(payment.amount) || 0).replace("₦", "")}
-                                                </Text>
-                                            </View>
-                                            <View style={[styles.debtBadge, { width: "48%" }]}>
-                                                <Text style={styles.debtLabel}>Debt</Text>
-                                                <Text style={styles.debtValue}>
-                                                    {formatAmount(Number(payment.debt) || 0).replace("₦", "")}
-                                                </Text>
-                                            </View>
+                                    <View style={styles.amountGrid}>
+                                        <View style={styles.amountBadge}>
+                                            <Text style={styles.amountLabel}>Amount</Text>
+                                            <Text style={styles.amountValue}>
+                                                {formatAmount(Number(payment.amount) || 0).replace("₦", "")}
+                                            </Text>
                                         </View>
+                                        <View style={styles.debtBadge}>
+                                            <Text style={styles.debtLabel}>Outstanding</Text>
+                                            <Text style={styles.debtValue}>
+                                                {formatAmount(Number(payment.debt) || 0).replace("₦", "")}
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    {isPayable ? (
                                         <TouchableOpacity
                                             style={styles.payNowButton}
-                                            activeOpacity={0.8}
+                                            activeOpacity={0.85}
                                             onPress={() => {
                                                 setSelectedPayment(payment);
                                                 setPaymentAmount(String(payment.amount || ""));
                                                 setShowPaymentModal(true);
                                             }}
                                         >
-                                            <Text style={styles.payNowText}>Pay</Text>
+                                            <Text style={styles.payNowText}>Pay now</Text>
                                         </TouchableOpacity>
-                                    </View>
+                                    ) : null}
                                 </View>
                             );
                         })}
@@ -272,77 +272,97 @@ export default function MakePayment() {
                 )}
 
                 <Modal visible={showPaymentModal} animationType="slide">
-                    <View style={{ flex: 1, backgroundColor: "#fff" }}>
+                    <View style={styles.modalShell}>
                         <View style={styles.modalHeaderRow}>
-                            <View />
-                            <TouchableOpacity onPress={() => setShowPaymentModal(false)}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.modalEyebrow}>Payment checkout</Text>
+                                <Text style={styles.modalHeaderTitle}>Review and pay securely</Text>
+                            </View>
+                            <TouchableOpacity style={styles.closeButtonWrap} onPress={() => setShowPaymentModal(false)}>
                                 <Text style={styles.closeButton}>✕</Text>
                             </TouchableOpacity>
                         </View>
 
                         {error ? (
-                            <View style={{ backgroundColor: "#fee2e2", paddingHorizontal: 10, paddingVertical: 15, marginVertical: 10, borderRadius: 8 }}>
-                                <Text style={{ color: "#dc2626", fontSize: 14 }}>{error}</Text>
+                            <View style={styles.errorBanner}>
+                                <Text style={styles.errorText}>{error}</Text>
                             </View>
                         ) : null}
 
-                        <ScrollView contentContainerStyle={styles.modalContent}>
-                            <Text style={styles.modalTitleLarge}>
-                                {pricing.find((item) => item.id === selectedPayment?.payment)?.title || selectedPayment?.payment || "Payment Details"}
-                            </Text>
+                        <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
+                            <View style={styles.modalHeroCard}>
+                                <Text style={styles.modalTitleLarge} numberOfLines={1}>
+                                    {pricing.find((item) => item.id === selectedPayment?.payment)?.title || selectedPayment?.payment || "Payment Details"}
+                                </Text>
 
-                            <View style={styles.badgeRow}>
-                                {pricing.find((item) => item.id === selectedPayment?.payment)?.category ? (
-                                    <View style={styles.categoryBadge}>
-                                        <Text style={styles.categoryText}>
-                                            {pricing.find((item) => item.id === selectedPayment?.payment)?.category}
+                                <View style={styles.badgeRow}>
+                                    {pricing.find((item) => item.id === selectedPayment?.payment)?.category ? (
+                                        <View style={styles.categoryBadge}>
+                                            <Text style={styles.categoryText}>
+                                                {pricing.find((item) => item.id === selectedPayment?.payment)?.category}
+                                            </Text>
+                                        </View>
+                                    ) : null}
+
+                                    <View style={[styles.statusBadge, selectedPayment?.status?.toLowerCase() === "success" ? styles.statusSuccess : styles.statusPending]}>
+                                        <Text style={[styles.statusText, selectedPayment?.status?.toLowerCase() === "success" ? styles.statusTextSuccess : styles.statusTextPending]}>
+                                            {selectedPayment?.status || "Pending"}
                                         </Text>
                                     </View>
-                                ) : null}
+                                </View>
 
-                                <View style={[styles.statusBadge, { backgroundColor: "#eef2ff" }]}>
-                                    <Text style={{ fontSize: 12, color: "#3730a3", fontWeight: "700" }}>
-                                        {selectedPayment?.status}
+                                <Text style={styles.modalSubtitle}>
+                                    Confirm the details below, enter the amount, and complete the payment in one step.
+                                </Text>
+                            </View>
+
+                            <View style={styles.summaryGrid}>
+                                <View style={styles.summaryCard}>
+                                    <Text style={styles.summaryLabel}>Reference</Text>
+                                    <Text style={styles.summaryValue} numberOfLines={1}>
+                                        {selectedPayment?.reference || "N/A"}
+                                    </Text>
+                                </View>
+                                <View style={styles.summaryCard}>
+                                    <Text style={styles.summaryLabel}>Due date</Text>
+                                    <Text style={styles.summaryValue} numberOfLines={1}>
+                                        {formatDate(selectedPayment?.due)}
+                                    </Text>
+                                </View>
+                                <View style={[styles.summaryCard, styles.summaryCardWide]}>
+                                    <Text style={styles.summaryLabel}>Outstanding balance</Text>
+                                    <Text style={[styles.summaryValue, { color: "#dc2626" }]}>
+                                        {selectedPayment ? formatAmount(Number(selectedPayment.debt) || 0) : "-"}
                                     </Text>
                                 </View>
                             </View>
 
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Reference</Text>
-                                <Text style={styles.detailValue}>{selectedPayment?.reference || "N/A"}</Text>
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputLabel}>Enter amount to pay</Text>
+                                <TextInput
+                                    style={styles.amountInputLarge}
+                                    placeholder="0"
+                                    placeholderTextColor="#94a3b8"
+                                    keyboardType="numeric"
+                                    value={paymentAmount}
+                                    onChangeText={(text) => setPaymentAmount(text.replace(/[^0-9]/g, ""))}
+                                />
                             </View>
 
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Due</Text>
-                                <Text style={styles.detailValue}>{formatDate(selectedPayment?.due)}</Text>
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputLabel}>Secure token</Text>
+                                <TextInput
+                                    style={styles.amountInput}
+                                    placeholder="Enter secure token"
+                                    placeholderTextColor="#94a3b8"
+                                    secureTextEntry
+                                    value={secureTokenInput}
+                                    onChangeText={(text) => setSecureTokenInput(text)}
+                                />
                             </View>
 
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Debt</Text>
-                                <Text style={[styles.detailValue, { color: "#dc2626", fontWeight: "700" }]}>
-                                    {selectedPayment ? formatAmount(Number(selectedPayment.debt) || 0) : "-"}
-                                </Text>
-                            </View>
-
-                            <Text style={{ marginTop: 8, marginBottom: 6, color: "#64748b" }}>Enter amount to pay</Text>
-                            <TextInput
-                                style={[styles.amountInputLarge]}
-                                placeholder="0"
-                                keyboardType="numeric"
-                                value={paymentAmount}
-                                onChangeText={(text) => setPaymentAmount(text.replace(/[^0-9]/g, ""))}
-                            />
-
-                            <Text style={{ marginTop: 12, marginBottom: 6, color: "#64748b" }}>Secure token</Text>
-                            <TextInput
-                                style={[styles.amountInput, { marginBottom: 6 }]}
-                                placeholder="Enter secure token"
-                                secureTextEntry
-                                value={secureTokenInput}
-                                onChangeText={(text) => setSecureTokenInput(text)}
-                            />
-                            <View>
-                                <Text>Transaction Fee is 5% of the payment amount</Text>
+                            <View style={styles.feeNote}>
+                                <Text style={styles.feeNoteText}>Transaction fee is 2.5% of the payment amount.</Text>
                             </View>
 
                             <TouchableOpacity
@@ -352,7 +372,7 @@ export default function MakePayment() {
                                     handlePayNow();
                                 }}
                             >
-                                <Text style={styles.modalPayText}>Pay Now</Text>
+                                <Text style={styles.modalPayText}>Pay now</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
@@ -406,32 +426,50 @@ const styles = StyleSheet.create({
     emptyText: { marginTop: 6, fontSize: 13, color: "#64748b" },
     paymentCard: {
         backgroundColor: "#fff",
-        borderRadius: 12,
-        padding: 14,
+        borderRadius: 16,
+        padding: 16,
         marginBottom: 12,
         borderWidth: 1,
-        borderColor: "#e2e8f0",
+        borderColor: "#e5e7eb",
         flexDirection: "column",
-        alignItems: "flex-start",
-        justifyContent: "space-between",
+        gap: 14,
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.08,
-        shadowRadius: 3,
-        elevation: 2,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.06,
+        shadowRadius: 16,
+        elevation: 3,
     },
-    paymentTitle: { fontSize: 15, fontWeight: "700", color: "#0f172a", marginBottom: 6 },
-    paymentMeta: { marginTop: 3, fontSize: 16, color: "#64748b", lineHeight: 16 },
+    cardTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 12 },
+    planLabel: { fontSize: 16, fontWeight: "800", color: "#0f172a", lineHeight: 20 },
+    paymentMeta: { marginTop: 4, fontSize: 13, color: "#64748b", lineHeight: 18 },
     statusBadge: {
         paddingVertical: 4,
         paddingHorizontal: 8,
-        borderRadius: 4,
+        borderRadius: 999,
+        alignSelf: "flex-start",
+        borderWidth: 1,
+    },
+    statusSuccess: {
+        backgroundColor: "#ecfdf5",
+        borderColor: "#a7f3d0",
+    },
+    statusPending: {
+        backgroundColor: "#eff6ff",
+        borderColor: "#bfdbfe",
+    },
+    statusText: { fontSize: 11, fontWeight: "800", letterSpacing: 0.2 },
+    statusTextSuccess: { color: "#166534" },
+    statusTextPending: { color: "#1d4ed8" },
+    amountGrid: {
+        flexDirection: "row",
+        gap: 10,
     },
     amountBadge: {
+        flex: 1,
         backgroundColor: "#dcfce7",
         paddingVertical: 8,
         paddingHorizontal: 10,
-        borderRadius: 8,
+        borderRadius: 12,
         minWidth: 70,
         alignItems: "center",
         borderWidth: 1,
@@ -440,10 +478,11 @@ const styles = StyleSheet.create({
     amountLabel: { fontSize: 12, color: "#0f172a", fontWeight: "600" },
     amountValue: { fontSize: 16, color: "#0ea360", fontWeight: "700", marginTop: 2 },
     debtBadge: {
+        flex: 1,
         backgroundColor: "#fee2e2",
         paddingVertical: 8,
         paddingHorizontal: 10,
-        borderRadius: 8,
+        borderRadius: 12,
         minWidth: 70,
         alignItems: "center",
         borderWidth: 1,
@@ -452,30 +491,53 @@ const styles = StyleSheet.create({
     debtLabel: { fontSize: 12, color: "#0f172a", fontWeight: "600" },
     debtValue: { fontSize: 16, color: "#dc2626", fontWeight: "700", marginTop: 2 },
     payNowButton: {
-        width: 310,
-        backgroundColor: "#0ea360",
-        paddingVertical: 16,
+        width: "100%",
+        backgroundColor: "#0f766e",
+        paddingVertical: 14,
         paddingHorizontal: 16,
-        borderRadius: 8,
+        borderRadius: 12,
         alignItems: "center",
         justifyContent: "center",
     },
-    payNowText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+    payNowText: { color: "#fff", fontWeight: "800", fontSize: 14 },
     modalHeader: {
         padding: 12,
         backgroundColor: "#fff",
         borderBottomWidth: 1,
         borderBottomColor: "#eee",
     },
-    modalHeaderRow: { padding: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-    closeButton: { fontSize: 16, color: "#0ea360" },
+    modalShell: { flex: 1, backgroundColor: "#f8fafc" },
+    modalHeaderRow: {
+        paddingHorizontal: 16,
+        paddingTop: 14,
+        paddingBottom: 12,
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        borderBottomWidth: 1,
+        borderBottomColor: "#e2e8f0",
+        backgroundColor: "#fff",
+    },
+    modalEyebrow: { color: "#0f766e", fontSize: 12, fontWeight: "800", letterSpacing: 0.6, textTransform: "uppercase" },
+    modalHeaderTitle: { marginTop: 4, color: "#0f172a", fontSize: 18, fontWeight: "800" },
+    closeButtonWrap: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "#f8fafc", borderWidth: 1, borderColor: "#e2e8f0" },
+    closeButton: { fontSize: 16, color: "#0f172a", fontWeight: "700" },
     modalTitle: { fontSize: 18, fontWeight: "700", marginBottom: 8, color: "#0f172a" },
     modalTitleLarge: { fontSize: 20, fontWeight: "800", marginBottom: 6, color: "#0f172a" },
+    modalSubtitle: { marginTop: 4, color: "#64748b", fontSize: 13, lineHeight: 19 },
     modalMeta: { marginBottom: 6, color: "#334155" },
-    modalContent: { padding: 20, paddingTop: 12, alignItems: "stretch" },
+    modalContent: { padding: 16, paddingTop: 14, paddingBottom: 28, alignItems: "stretch" },
+    modalHeroCard: { backgroundColor: "#fff", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#e2e8f0", marginBottom: 12 },
     badgeRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
     categoryBadge: { backgroundColor: "#f1f5f9", paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8 },
     categoryText: { color: "#0f172a", fontWeight: "700" },
+    summaryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 12 },
+    summaryCard: { flexBasis: "48%", flexGrow: 1, backgroundColor: "#fff", borderRadius: 14, padding: 12, borderWidth: 1, borderColor: "#e2e8f0" },
+    summaryCardWide: { flexBasis: "100%" },
+    summaryLabel: { color: "#64748b", fontSize: 12, fontWeight: "600", marginBottom: 6 },
+    summaryValue: { color: "#0f172a", fontSize: 14, fontWeight: "700" },
+    inputGroup: { marginBottom: 12 },
+    inputLabel: { marginBottom: 6, color: "#334155", fontSize: 13, fontWeight: "600" },
     detailRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" },
     detailLabel: { color: "#64748b", fontSize: 13 },
     detailValue: { color: "#0f172a", fontSize: 14, fontWeight: "600" },
@@ -488,7 +550,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: "#1e293b",
     },
-    amountInputLarge: { backgroundColor: "#f8fafc", borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, padding: 16, fontSize: 18, color: "#0f172a", width: "100%" },
+    amountInputLarge: { backgroundColor: "#f8fafc", borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, padding: 16, fontSize: 18, color: "#0f172a", width: "100%" },
     proceedButton: {
         backgroundColor: "#0ea360",
         height: 48,
@@ -505,4 +567,8 @@ const styles = StyleSheet.create({
     modalPayText: { color: "#fff", fontSize: 16, fontWeight: "700" },
     modalCancelButton: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#e2e8f0", paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center", marginTop: 10 },
     modalCancelText: { color: "#374151", fontSize: 15, fontWeight: "600" },
+    errorBanner: { backgroundColor: "#fee2e2", paddingHorizontal: 12, paddingVertical: 14, marginVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: "#fecaca" },
+    errorText: { color: "#b91c1c", fontSize: 14, lineHeight: 20 },
+    feeNote: { marginTop: 2, padding: 12, borderRadius: 10, backgroundColor: "#f8fafc", borderWidth: 1, borderColor: "#e2e8f0" },
+    feeNoteText: { color: "#475569", fontSize: 13, lineHeight: 19 },
 });

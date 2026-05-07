@@ -18,7 +18,7 @@ export const useWallet = () => {
 
 export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
     const [wallet, setWallet] = useState<Wallet | null>(null);
-    const [walletState, setWalletState] = useState<boolean>(null);
+    const [walletState, setWalletState] = useState<boolean>(false);
     const [isWallet, setIsWallet] = useState<boolean>(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
@@ -29,11 +29,9 @@ export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
 
     const toggleHide = async (toggle: boolean) => {
         if (toggle) {
-            await AsyncStorage.setItem(AUTH_MEMBER_WALLET_STATE, JSON.stringify({ hidden: false }));
-            setHide(false);
+            setWalletState(false);
         } else {
-            await AsyncStorage.setItem(AUTH_MEMBER_WALLET_STATE, JSON.stringify({ hidden: true }));
-            setHide(true);
+            setWalletState(true);
         }
     }
 
