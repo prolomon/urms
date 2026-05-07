@@ -60,9 +60,9 @@ function WalletPage() {
 
         setUid(user?.uid || null);
 
-        if (!wallet) {
-            router.replace("/partner/complete");
-        }
+        // if (!wallet) {
+        //     router.replace("/partner/complete");
+        // }
     }, [router, wallet, setUid, user?.uid]);
 
     //this id for the bank details 

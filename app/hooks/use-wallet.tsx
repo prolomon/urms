@@ -18,7 +18,7 @@ export const useWallet = () => {
 
 export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
     const [wallet, setWallet] = useState<Wallet | null>(null);
-    const [walletState, setWalletState] = useState<{ hidden: boolean } | null>(null);
+    const [walletState, setWalletState] = useState<boolean>(null);
     const [isWallet, setIsWallet] = useState<boolean>(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
@@ -51,10 +51,8 @@ export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
 
             const tok = await AsyncStorage.getItem(AUTH_MEMBER_TOKEN);
 
-            const walletState = await AsyncStorage.getItem(AUTH_MEMBER_WALLET_STATE);
-
             if (walletState) {
-                setHide(JSON.parse(walletState)?.hidden);
+                setHide(walletState);
             }
 
             if (tok) {
