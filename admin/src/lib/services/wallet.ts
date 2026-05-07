@@ -146,7 +146,7 @@ export async function resolveBankAccount(
 }
 
 export async function getBanks() {
-  const response = await fetch(`${API_URL}/banks`, {
+  const response = await fetch(`${API_URL}/wallet/banks`, {
     headers: { ...buildHeaders(true) },
   });
   const data = await response.json();

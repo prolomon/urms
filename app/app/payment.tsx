@@ -279,7 +279,7 @@ export default function MakePayment() {
                         </View>
 
                         {error ? (
-                            <View style={{ backgroundColor: "#fee2e2", padding: 10, margin: 20, borderRadius: 8 }}>
+                            <View style={{ backgroundColor: "#fee2e2", paddingHorizontal: 10, paddingVertical: 15, marginVertical: 10, borderRadius: 8 }}>
                                 <Text style={{ color: "#dc2626", fontSize: 14 }}>{error}</Text>
                             </View>
                         ) : null}

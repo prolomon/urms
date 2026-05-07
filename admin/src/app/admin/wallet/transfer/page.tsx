@@ -7,11 +7,11 @@ import {
     Wallet,
 } from "lucide-react";
 import withAuth from "@/components/withAuth";
-import banklist from "@/lib/jsons/banklist.json";
 import { verifySecurityCode } from "@/lib/services/company";
 import { useAuth } from "@/context/AuthContext";
 import { useWallet } from "@/context/WalletContext";
 import { useRouter } from "next/navigation";
+import { getBanks } from "@/lib/services/wallet";
 
 function WalletPage() {
     const router = useRouter();
@@ -20,6 +20,25 @@ function WalletPage() {
     const { user } = useAuth();
     const { wallet, loading, error, resolveBankAccount, initiateTransfer } = useWallet();
     const [success, setSuccess] = useState(false);
+
+    const [bankList, setBankList] = useState<{ code: string, logo: string, name: string, nipCode: null }[]>([]);
+
+    const fetchBanks = useCallback(async () => {
+    try {
+      const data = await getBanks();
+
+      if (data.ok && data.banks) {
+        setBankList(data.banks?.data);
+      }
+
+    } catch (e) {
+      console.log(e?.error || e?.message || "Failed to fetch banks");  
+    }
+  }, []);
+
+  useEffect(() => {
+      fetchBanks();
+ }, [fetchBanks]);
 
     const [formData, setFormData] = useState({
         accountNumber: "",
@@ -217,7 +236,7 @@ function WalletPage() {
                                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100 appearance-none"
                             >
                                 <option value="">Select bank</option>
-                                {banklist.map((bank) => (
+                                {bankList.map((bank) => (
                                     <option key={bank.code} value={bank.code}>
                                         {bank.name}
                                     </option>
