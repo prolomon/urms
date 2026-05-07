@@ -34,16 +34,18 @@ export default function Dashboard() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const { wallet, toggleHide, hide, refresh, getTransactions } = useWallet();
+  const { wallet, toggleHide, hide, refresh, getTransactions, setUid } = useWallet();
   const walletBalance = Number(wallet?.balance || 0);
   const walletAccountNo = wallet?.accountNo || 0;
   const walletBank = wallet?.bank?.name || "-";
 
   const loadVerifyWallet = useCallback(async () => {
+    setUid(currentUser?.uid || "");
     if (!wallet) {
       router.push("/complete" as RelativePathString);
       return;
     }
+
   }, [router, wallet]);
 
   useEffect(() => {

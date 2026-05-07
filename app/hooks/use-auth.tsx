@@ -194,6 +194,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (uid: string, password: string) => {
     try {
+      await AsyncStorage.removeItem(AUTH_MEMBER);
+    await AsyncStorage.removeItem(AUTH_MEMBER_TOKEN);
+    await AsyncStorage.removeItem(AUTH_MEMBER_WALLET);
+    await AsyncStorage.removeItem(AUTH_MEMBER_WALLET_STATE);
 
       const response = await MemberLogin(uid, password);
 

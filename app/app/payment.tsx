@@ -149,10 +149,12 @@ export default function MakePayment() {
             setPaymentAmount("");
             setSelectedPayment(null);
             fetchPayments();
-            setShowPaymentModal(false)
+            
         } catch (error: any) {
             setError(error?.message || "An error occurred during verification");
             failed(error?.message || "An error occurred during verification");
+        } finally {
+            setShowPaymentModal(false)
         }
     };
 

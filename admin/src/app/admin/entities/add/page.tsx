@@ -199,6 +199,7 @@ export default function AddEntityPage() {
         });
     };
 
+
     const validateForm = (): boolean => {
         if (!formData.fullname?.trim()) {
             addToast("error", "Full name is required");
@@ -278,6 +279,8 @@ export default function AddEntityPage() {
     const getFilteredPricing = () => {
         return pricingOptions.filter((p) => p.category === formData.category);
     };
+
+    console.log(pricingOptions, formData.category, getFilteredPricing());
 
     if (loading) {
         return (

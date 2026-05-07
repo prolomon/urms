@@ -386,8 +386,10 @@ const makePayment = async (req, res) => {
       }
     });
 
+    console.log(pricing);
+
     const paymentRecord = await prisma.payment.findFirst({
-      where: { id: paymentId },
+      where: { payment: paymentId },
       select: {
         id: true,
         reference: true,
@@ -404,6 +406,10 @@ const makePayment = async (req, res) => {
         updatedAt: true,
       }
     });
+
+    console.log(paymentRecord);
+
+    console.log(paymentId, userId, amount, center, company);
 
     if (!paymentRecord) {
       return res.status(404).json({ ok: false, message: 'Payment record not found' });
@@ -531,7 +537,7 @@ const makePayment = async (req, res) => {
 
     // Create payment record
     const payment = await prisma.payment.update({
-      where: { id: paymentId },
+      where: { payment: paymentRecord.id },
       data: {
         debt: (paymentRecord.amount - totalAmount),
         status: 'PENDING',
@@ -579,7 +585,6 @@ const makePayment = async (req, res) => {
       message: 'Payment initiated, split and transfers initialized successfully',
       data: {
         payment,
-        paymentDebt: updatedPaymentRecord || null,
         amountBreakdown: {
           grossAmount,
           fee,

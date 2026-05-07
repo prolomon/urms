@@ -1119,12 +1119,6 @@ export default function EntityDetailsPage({ params }) {
                     Reference
                   </th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-700 md:px-6 md:text-sm">
-                    Business
-                  </th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-700 md:px-6 md:text-sm">
-                    Type
-                  </th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-700 md:px-6 md:text-sm">
                     Frequency
                   </th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-700 md:px-6 md:text-sm">
@@ -1151,12 +1145,6 @@ export default function EntityDetailsPage({ params }) {
                       >
                         {p.reference || p.id}
                       </Link>
-                    </td>
-                    <td className="px-4 py-4 text-xs text-slate-700 md:px-6 md:text-sm">
-                      {p.businessName || "—"}
-                    </td>
-                    <td className="px-4 py-4 text-xs text-slate-700 md:px-6 md:text-sm">
-                      {p.businessType || "—"}
                     </td>
                     <td className="px-4 py-4 text-xs text-slate-700 md:px-6 md:text-sm">
                       {p.frequency || p.billingFrequency || "—"}

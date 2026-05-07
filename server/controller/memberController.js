@@ -150,10 +150,6 @@ const createMember = async (req, res) => {
       });
     }
 
-    const selectedPricing = value.pricing
-
-    console.log("Selected pricing for new member:", selectedPricing);
-
     const { member, initialPayment } = await prisma.$transaction(async (tx) => {
       const createdMember = await tx.member.create({
         data: {
@@ -174,17 +170,42 @@ const createMember = async (req, res) => {
         },
       });
 
-      let createdPayment = null;
+      const selectedPricingIds = Array.isArray(value.pricing) ? value.pricing : [];
+      const availablePricing = selectedPricingIds.length
+        ? await tx.pricing.findMany({
+            where: {
+              id: { in: selectedPricingIds },
+              status: true,
+            },
+            select: {
+              id: true,
+              price: true,
+            },
+          })
+        : [];
 
-      for (const pricingId of value.pricing || []) {
-        await createPaymentRecord(
+      const pricingById = new Map(
+        availablePricing.map((pricing) => [pricing.id, pricing]),
+      );
+
+      const createdPayments = [];
+
+      for (const pricingId of selectedPricingIds) {
+        const matchedPricing = pricingById.get(pricingId);
+
+        if (!matchedPricing) {
+          console.warn("Skipping unavailable pricing for new member:", pricingId);
+          continue;
+        }
+
+        const createdPayment = await createPaymentRecord(
           {
             userId: createdMember.uid,
             frequency: createdMember.billingFrequency,
             sessions: [],
             debt: 0,
             due: new Date(),
-            amount: Number(selectedPricing.price),
+            amount: Number(matchedPricing.price),
             payment: pricingId,
             status: "PENDING",
             isVerify: false,
@@ -192,12 +213,14 @@ const createMember = async (req, res) => {
           },
           tx,
         );
+
+        createdPayments.push(createdPayment);
       }
 
       console.log("Created member:", createdMember);
-      console.log("Created initial payment:", createdPayment);
+      console.log("Created initial payments:", createdPayments);
 
-      return { member: createdMember, initialPayment: createdPayment };
+      return { member: createdMember, initialPayment: createdPayments };
     });
 
     if (!member) {

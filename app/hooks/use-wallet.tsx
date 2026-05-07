@@ -50,10 +50,10 @@ export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
 
             const tok = await AsyncStorage.getItem(AUTH_MEMBER_TOKEN);
 
-            const walletState = (await AsyncStorage.getItem(AUTH_MEMBER_WALLET_STATE)) ? JSON.parse(await AsyncStorage.getItem(AUTH_MEMBER_WALLET_STATE) as string) : null;
+            const walletState = await AsyncStorage.getItem(AUTH_MEMBER_WALLET_STATE);
 
             if (walletState) {
-                setHide(walletState?.hidden);
+                setHide(JSON.parse(walletState)?.hidden);
             }
 
             if (tok) {
