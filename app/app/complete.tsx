@@ -117,7 +117,7 @@ export default function CompleteProfileScreen() {
             }
 
             success(res.message || "Security code set successfully");
-            router.replace("/pages/(pages)" as RelativePathString);
+            router.replace("/(pages)" as RelativePathString);
         }
         catch (e: any) {
             console.log(e)
