@@ -386,6 +386,29 @@ const makePayment = async (req, res) => {
       }
     });
 
+    const paymentRecord = await prisma.payment.findFirst({
+      where: { id: paymentId },
+      select: {
+        id: true,
+        reference: true,
+        userId: true,
+        frequency: true,
+        sessions: true,
+        debt: true,
+        due: true,
+        amount: true,
+        payment: true,
+        status: true,
+        isVerify: true,
+        createdAt: true,
+        updatedAt: true,
+      }
+    });
+
+    if (!paymentRecord) {
+      return res.status(404).json({ ok: false, message: 'Payment record not found' });
+    }
+
     const main = await prisma.admin.findFirst({
       where: { uid: center },
       select: {
@@ -487,9 +510,16 @@ const makePayment = async (req, res) => {
       return res.status(500).json({ ok: false, message: 'Payment configuration is incomplete' });
     }
 
+    if (senderWallet && senderWallet.balance < amount) {
+      return res.status(400).json({ ok: false, message: 'Insufficient balance in sender wallet' });
+    }
+
     // Parse payment config for split percentages
     const paymentConfig = main.paymentConfig || { main: 40, agent: 20, operation: 25, technology: 15 };
-    const totalAmount = Number(amount);
+    const grossAmount = Number(amount);
+    const feePercentage = 0.05; // 5% fee
+    const fee = grossAmount * feePercentage;
+    const totalAmount = grossAmount - fee;
 
     // Calculate split amounts
     const mainAmount = (totalAmount * paymentConfig.main) / 100; // 40% → mainWallet
@@ -500,13 +530,11 @@ const makePayment = async (req, res) => {
     const paymentReference = generatePaymentReference();
 
     // Create payment record
-    const payment = await prisma.payment.create({
+    const payment = await prisma.payment.update({
+      where: { id: paymentId }, 
       data: {
-        reference: paymentReference,
-        userId,
-        amount: totalAmount,
+        debt: (paymentRecord.amount - totalAmount),
         status: 'PENDING',
-        payment: 'direct',
       },
     });
 
@@ -546,219 +574,17 @@ const makePayment = async (req, res) => {
       });
     }
 
-    // Create transaction records for audit trail
-    await prisma.transaction.create({
-      data: {
-        reference: paymentReference,
-        event: 'payment.split.main',
-        status: 'SUCCESS',
-        amount: mainAmount + operationAmount,
-        currency: 'NGN',
-        channel: 'wallet',
-        paymentReference,
-        userId: mainWallet?.userId,
-        metadata: { main: mainAmount, operation: operationAmount },
-      },
-    }).catch(() => null);
-
-    await prisma.transaction.create({
-      data: {
-        reference: paymentReference,
-        event: 'payment.split.agent',
-        status: 'SUCCESS',
-        amount: agentAmount + technologyAmount,
-        currency: 'NGN',
-        channel: 'wallet',
-        paymentReference,
-        userId: agentWallet?.userId,
-        metadata: { agent: agentAmount, technology: technologyAmount },
-      },
-    }).catch(() => null);
-
-    // Resolve bank details and initialize transfers
-    const transfers = [];
-
-    // Transfer to mainWallet
-    if (mainWallet && mainWallet.accountNo && mainWallet.bank) {
-      try {
-        const bankData = typeof mainWallet.bank === 'string' ? JSON.parse(mainWallet.bank) : mainWallet.bank;
-        const bankCode = bankData?.code || '';
-        const mainTransferAmount = mainAmount + operationAmount;
-
-        if (bankCode && mainWallet.accountNo && mainWallet.accountName) {
-          // Create recipient for main wallet
-          const recipientResponse = await createRecipient(
-            mainWallet.accountName,
-            mainWallet.accountNo,
-            bankCode,
-            'NGN'
-          );
-
-          if (recipientResponse?.status && recipientResponse?.data?.recipient_code) {
-            // Initiate transfer to main wallet
-            const transferResponse = await initiateTransfer(
-              mainTransferAmount,
-              recipientResponse.data.recipient_code,
-              `Payment split to main wallet - ${paymentReference}`
-            );
-
-            transfers.push({
-              recipient: 'mainWallet',
-              amount: mainTransferAmount,
-              status: transferResponse?.status ? 'INITIATED' : 'FAILED',
-              reference: transferResponse?.data?.reference || null,
-              message: transferResponse?.message || 'Transfer initiated',
-            });
-
-            // Record transfer transaction
-            if (transferResponse?.status) {
-              await prisma.transaction.create({
-                data: {
-                  reference: transferResponse?.data?.reference || paymentReference,
-                  event: 'payment.transfer.main',
-                  status: 'SUCCESS',
-                  amount: mainTransferAmount,
-                  currency: 'NGN',
-                  channel: 'paystack',
-                  paymentReference,
-                  userId: mainWallet?.userId,
-                  metadata: { 
-                    recipient: mainWallet.accountNo,
-                    bank: bankData?.name || 'Unknown',
-                    transferRef: transferResponse?.data?.reference,
-                  },
-                },
-              }).catch(() => null);
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Error processing main wallet transfer:', err?.message || err);
-        transfers.push({
-          recipient: 'mainWallet',
-          amount: mainAmount + operationAmount,
-          status: 'FAILED',
-          message: err?.message || 'Failed to process transfer',
-        });
-      }
-    }
-
-    // Transfer to agentWallet
-    if (agentWallet && agentWallet.accountNo && agentWallet.bank) {
-      try {
-        const bankData = typeof agentWallet.bank === 'string' ? JSON.parse(agentWallet.bank) : agentWallet.bank;
-        const bankCode = bankData?.code || '';
-        const agentTransferAmount = agentAmount + technologyAmount;
-
-        if (bankCode && agentWallet.accountNo && agentWallet.accountName) {
-          // Create recipient for agent wallet
-          const recipientResponse = await createRecipient(
-            agentWallet.accountName,
-            agentWallet.accountNo,
-            bankCode,
-            'NGN'
-          );
-
-          if (recipientResponse?.status && recipientResponse?.data?.recipient_code) {
-            // Initiate transfer to agent wallet
-            const transferResponse = await initiateTransfer(
-              agentTransferAmount,
-              recipientResponse.data.recipient_code,
-              `Payment split to agent wallet - ${paymentReference}`
-            );
-
-            transfers.push({
-              recipient: 'agentWallet',
-              amount: agentTransferAmount,
-              status: transferResponse?.status ? 'INITIATED' : 'FAILED',
-              reference: transferResponse?.data?.reference || null,
-              message: transferResponse?.message || 'Transfer initiated',
-            });
-
-            // Record transfer transaction
-            if (transferResponse?.status) {
-              await prisma.transaction.create({
-                data: {
-                  reference: transferResponse?.data?.reference || paymentReference,
-                  event: 'payment.transfer.agent',
-                  status: 'SUCCESS',
-                  amount: agentTransferAmount,
-                  currency: 'NGN',
-                  channel: 'paystack',
-                  paymentReference,
-                  userId: agentWallet?.userId,
-                  metadata: { 
-                    recipient: agentWallet.accountNo,
-                    bank: bankData?.name || 'Unknown',
-                    transferRef: transferResponse?.data?.reference,
-                  },
-                },
-              }).catch(() => null);
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Error processing agent wallet transfer:', err?.message || err);
-        transfers.push({
-          recipient: 'agentWallet',
-          amount: agentAmount + technologyAmount,
-          status: 'FAILED',
-          message: err?.message || 'Failed to process transfer',
-        });
-      }
-    }
-
-    // Update payment debt by subtracting the paid amount
-    let updatedPaymentRecord = null;
-    try {
-      const existingPayment = await prisma.payment.findFirst({
-        where: {
-          userId,
-          payment: paymentId,
-        },
-      });
-
-      if (existingPayment) {
-        const currentDebt = Number(existingPayment.debt ?? 0);
-        const newDebt = Math.max(currentDebt - totalAmount, 0);
-
-        updatedPaymentRecord = await prisma.payment.update({
-          where: { id: existingPayment.id },
-          data: {
-            debt: newDebt,
-            status: newDebt <= 0 ? 'SUCCESS' : 'PENDING',
-          },
-        });
-
-        // Record debt update transaction
-        await prisma.transaction.create({
-          data: {
-            reference: paymentReference,
-            event: 'payment.debt.updated',
-            status: 'SUCCESS',
-            amount: totalAmount,
-            currency: 'NGN',
-            channel: 'wallet',
-            paymentReference,
-            userId,
-            metadata: {
-              previousDebt: currentDebt,
-              newDebt,
-              amountPaid: totalAmount,
-            },
-          },
-        }).catch(() => null);
-      }
-    } catch (err) {
-      console.error('Error updating payment debt:', err?.message || err);
-    }
-
     return res.status(201).json({
       ok: true,
       message: 'Payment initiated, split and transfers initialized successfully',
       data: {
         payment,
         paymentDebt: updatedPaymentRecord || null,
+        amountBreakdown: {
+          grossAmount,
+          fee,
+          netAmount: totalAmount,
+        },
         split: {
           mainWallet: mainAmount + operationAmount,
           agentWallet: agentAmount + technologyAmount,

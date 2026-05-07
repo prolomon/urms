@@ -102,8 +102,6 @@ export default function Dashboard() {
     return "#6b7280";
   };
 
-  console.log(wallet)
-
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView

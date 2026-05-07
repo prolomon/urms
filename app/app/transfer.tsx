@@ -7,7 +7,7 @@ import bankList from "@/lib/jsons/banklist.json";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { RelativePathString, useRouter } from "expo-router";
 import { ArrowLeft, Search } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -20,9 +20,11 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  RefreshControl
+  RefreshControl,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { getBanks } from "@/lib/services/wallet";
 
 type BankOption = {
   id: string | number;
@@ -60,15 +62,36 @@ export default function TransferScreen() {
   const [selectedBankName, setSelectedBankName] = useState("");
   const [bankSearch, setBankSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  const [bankList, setBankList] = useState<{ code: string, logo: string, name: string, nipCode: null }[]>([]);
 
-  const filteredBanks = BANK_OPTIONS.filter((bank) => {
+  const fetchBanks = useCallback(async () => {
+    try {
+      const data = await getBanks(token || "");
+
+      if (data.ok && data.banks) {
+        console.log("Fetched banks:", data.banks);
+        setBankList(data.banks?.data);
+      }
+    } catch (e) {
+      failed("Unable to fetch banks");
+    }
+  }, [token, failed]);
+
+  useEffect(() => {
+    if (token) {
+      fetchBanks();
+    } else {
+      setSelectedBankName("");
+    } }, [token, fetchBanks]);
+
+  const filteredBanks = bankList.filter((bank) => {
     const query = bankSearch.trim().toLowerCase();
     if (!query) return true;
 
     return (
       bank.name.toLowerCase().includes(query) ||
       String(bank.code || "").toLowerCase().includes(query) ||
-      String(bank.id || "").toLowerCase().includes(query)
+      String(bank.nipCode || "").toLowerCase().includes(query)
     );
   });
 
@@ -320,7 +343,7 @@ export default function TransferScreen() {
 
                 <FlatList
                   data={filteredBanks}
-                  keyExtractor={(item) => String(item.id)}
+                  keyExtractor={(item) => String(item.code)}
                   keyboardShouldPersistTaps="handled"
                   ListEmptyComponent={
                     <Text style={styles.emptySearchText}>No banks found.</Text>
@@ -337,11 +360,14 @@ export default function TransferScreen() {
                         setBankModalVisible(false);
                       }}
                     >
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.bankName}>{item.name}</Text>
+                      <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
+                        <Image source={item.logo ? { uri: item.logo } : require("../assets/images/icon.png")} style={{ width: 32, height: 32, marginRight: 12 }} resizeMode="contain" />
+                        <View>
+                          <Text style={styles.bankName}>{item.name}</Text>
                         <Text style={styles.bankId}>
-                          ID: {String(item.id)}{item.code ? ` | CODE: ${String(item.code)}` : ""}
+                          ID: {String(item.code)}{item.code ? ` | CODE: ${String(item.code)}` : ""}
                         </Text>
+                        </View>
                       </View>
                     </TouchableOpacity>
                   )}

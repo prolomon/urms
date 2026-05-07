@@ -123,6 +123,7 @@ export default function MakePayment() {
 
         try {
             const res = await verifySecurityCode(currentUser.uid, secureTokenInput.trim(), token as string);
+            
             if (!res || !res.ok) {
                 failed(res?.message || "Secure token verification failed");
                 return;

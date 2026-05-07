@@ -91,8 +91,8 @@ export async function resolveBankAccount(
   return data;
 }
 
-export async function getBanks(token: string): Promise<{ ok: boolean; banks?: { name: string; code: string }[]; message?: string }> {
-  const response = await fetch(`${API_URL}/banks`, {
+export async function getBanks(token: string): Promise<{ ok: boolean; banks?: { code: string, data: [] }; message?: string }> {
+  const response = await fetch(`${API_URL}/wallet/banks`, {
     headers: { ...buildHeaders(true, token  ) },
   });
   const data = await response.json();
@@ -120,3 +120,4 @@ export async function getTransactions(
   return data;
 }
 
+ 
