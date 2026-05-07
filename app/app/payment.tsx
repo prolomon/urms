@@ -34,6 +34,7 @@ export default function MakePayment() {
     const [paymentAmount, setPaymentAmount] = useState<string>("");
     const [secureTokenInput, setSecureTokenInput] = useState<string>("");
     const [pricing, setPricing] = useState<Pricing[]>([]);
+    const [error, setError] = useState<string>("");
 
     const fetchPricing = useCallback(async () => {
         try {
@@ -53,10 +54,6 @@ export default function MakePayment() {
     useEffect(() => {
         fetchPricing();
     }, [fetchPricing]);
-
-    const priceData = (id: string) => {
-        return pricing.find((item) => item.id === id) as Pricing;
-    }
 
     const formatAmount = (value: number) =>
         value.toLocaleString("en-NG", {
@@ -112,24 +109,25 @@ export default function MakePayment() {
 
     const handlePayNow = async () => {
         if (!currentUser?.uid) {
+            setError("No user available");
             failed("No user available");
             return;
         }
 
         if (!secureTokenInput || secureTokenInput.trim().length === 0) {
+            setError("Please enter your secure token");
             failed("Please enter your secure token");
             return;
         }
 
         try {
             const res = await verifySecurityCode(currentUser.uid, secureTokenInput.trim(), token as string);
-            
+
             if (!res || !res.ok) {
+                setError(res?.message || "Secure token verification failed");
                 failed(res?.message || "Secure token verification failed");
                 return;
             }
-
-            success("Secure token verified");
 
             const paymentRes = await makePayment(
                 currentUser.uid,
@@ -141,6 +139,7 @@ export default function MakePayment() {
             );
 
             if (!paymentRes || !paymentRes.ok) {
+                setError(paymentRes?.message || "Payment failed");
                 failed(paymentRes?.message || "Payment failed");
                 return;
             }
@@ -150,7 +149,9 @@ export default function MakePayment() {
             setPaymentAmount("");
             setSelectedPayment(null);
             fetchPayments();
+            setShowPaymentModal(false)
         } catch (error: any) {
+            setError(error?.message || "An error occurred during verification");
             failed(error?.message || "An error occurred during verification");
         }
     };
@@ -277,6 +278,12 @@ export default function MakePayment() {
                             </TouchableOpacity>
                         </View>
 
+                        {error ? (
+                            <View style={{ backgroundColor: "#fee2e2", padding: 10, margin: 20, borderRadius: 8 }}>
+                                <Text style={{ color: "#dc2626", fontSize: 14 }}>{error}</Text>
+                            </View>
+                        ) : null}
+
                         <ScrollView contentContainerStyle={styles.modalContent}>
                             <Text style={styles.modalTitleLarge}>
                                 {pricing.find((item) => item.id === selectedPayment?.payment)?.title || selectedPayment?.payment || "Payment Details"}
@@ -341,7 +348,6 @@ export default function MakePayment() {
                                 activeOpacity={0.95}
                                 onPress={() => {
                                     handlePayNow();
-                                    setShowPaymentModal(false);
                                 }}
                             >
                                 <Text style={styles.modalPayText}>Pay Now</Text>
