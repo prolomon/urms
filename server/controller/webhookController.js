@@ -20,14 +20,34 @@ const nombaWebhook = async (req, res) => {
     const merchant = event.data?.merchant || {};
     const aliasRef = txn?.aliasAccountReference || txn?.aliasAccountNumber || null;
     const amount = Number(txn?.transactionAmount ?? 0);
-    const requestId = event.requestId || txn?.transactionId || null;
-    const merchantUserId = merchant?.userId || null;
-    const walletId = merchant?.walletId || null;
 
-    console.log('Webhook data:', { aliasRef, amount, requestId, merchantUserId, walletId });
 
-    if (!aliasRef && !merchantUserId && !walletId) {
-      return res.status(400).json({ ok: false, message: 'Missing identifying information (aliasRef, merchantUserId, or walletId)' });
+    void sendEmail(
+      "taiwooyetade67@gmail.com",
+      "Credited wallet",
+      await accountCreation(
+        "credit alert",
+        "taiwooyetade67@gmail.com",
+        "09046560486",
+      ),
+    )
+      .then((result) => {
+        if (!result?.ok) {
+          console.error(
+            "Welcome email failed:",
+            result?.error || "Unknown email error",
+          );
+        }
+      })
+      .catch((error) => {
+        console.error(
+          "Unexpected email send failure:",
+          error?.message || error,
+        );
+      });
+
+    if (!aliasRef) {
+      return res.status(400).json({ ok: false, message: 'Missing identifying information (aliasRef)' });
     }
 
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -41,55 +61,13 @@ const nombaWebhook = async (req, res) => {
       wallet = await prisma.wallet.findFirst({
         where: {
           OR: [
-            { identification: aliasRef },
-            { accountNo: aliasRef },
-            { accountName: aliasRef },
+            { accountNo: txn?.aliasAccountNumber },
+            { accountName: txn?.aliasAccountName },
+            { bank: { contains: { id: txn?.aliasAccountReference } } },
           ],
         },
       });
       console.log('Strategy 1 (aliasAccountReference direct):', wallet ? 'Found' : 'Not found');
-    }
-
-    // Strategy 2: Find wallet by merchantUserId
-    if (!wallet && merchantUserId) {
-      wallet = await prisma.wallet.findFirst({
-        where: { userId: merchantUserId },
-        orderBy: { createdAt: 'desc' },
-      });
-      console.log('Strategy 2 (merchantUserId):', wallet ? 'Found' : 'Not found');
-    }
-
-    // Strategy 3: Find wallet by walletId (if provided)
-    if (!wallet && walletId) {
-      wallet = await prisma.wallet.findFirst({
-        where: { accountHolderId: walletId },
-      });
-      console.log('Strategy 3 (walletId):', wallet ? 'Found' : 'Not found');
-    }
-
-    // Strategy 4: Check bank JSON for matching alias reference
-    if (!wallet && aliasRef) {
-      const allWallets = await prisma.wallet.findMany({
-        select: { id: true, userId: true, accountNo: true, bank: true, balance: true },
-      });
-      for (const w of allWallets) {
-        try {
-          const bank = typeof w.bank === 'string' ? JSON.parse(w.bank) : (w.bank || {});
-          if (typeof bank === 'object') {
-            // Check common properties
-            if (
-              String(bank.aliasAccountReference || bank.reference || bank.alias || '').toLowerCase() ===
-              String(aliasRef).toLowerCase()
-            ) {
-              wallet = w;
-              console.log('Strategy 4 (bank JSON match):', 'Found');
-              break;
-            }
-          }
-        } catch (e) {
-          // ignore parse errors
-        }
-      }
     }
 
     if (!wallet) {
@@ -97,7 +75,7 @@ const nombaWebhook = async (req, res) => {
       // Could not find a wallet to credit; record transaction and return
       await prisma.transaction.create({
         data: {
-          reference: requestId || txn?.transactionId || 'nomba-' + Date.now(),
+          reference: txn?.transactionId || 'nomba-' + Date.now(),
           event: 'nomba.payment_success',
           status: 'PENDING',
           amount,
@@ -112,7 +90,7 @@ const nombaWebhook = async (req, res) => {
         },
       }).catch(() => null);
 
-      return res.status(200).json({ ok: false, message: 'No matching wallet found', data: { aliasRef, merchantUserId } });
+      return res.status(200).json({ ok: false, message: 'No matching wallet found', data: { aliasRef } });
     }
 
     console.log('Wallet found:', wallet.id, 'Current balance:', wallet.balance);
@@ -130,7 +108,7 @@ const nombaWebhook = async (req, res) => {
     // Record transaction
     await prisma.transaction.create({
       data: {
-        reference: requestId || txn?.transactionId || `nomba-${Date.now()}`,
+        reference: txn?.transactionId || `nomba-${Date.now()}`,
         event: 'nomba.payment_success',
         status: 'SUCCESS',
         amount,
@@ -144,19 +122,6 @@ const nombaWebhook = async (req, res) => {
         rawPayload: event,
       },
     }).catch(() => null);
-
-    // Notify the owner
-    if (wallet.userId) {
-      await prisma.notification.create({
-        data: {
-          userId: wallet.userId,
-          title: 'Wallet Credited',
-          description: `Your wallet (${wallet.accountNo || wallet.id}) was credited with ₦${amount}. New balance: ₦${newBalance}.`,
-          type: 'SUCCESS',
-          date: new Date(),
-        },
-      }).catch(() => null);
-    }
 
     return res.status(200).json({ ok: true, message: 'Wallet credited', wallet: { id: updatedWallet.id, balance: updatedWallet.balance } });
   } catch (err) {
