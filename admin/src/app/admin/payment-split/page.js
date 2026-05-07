@@ -11,7 +11,8 @@ import {
   Legend,
 } from "recharts";
 import { useAuth } from "@/context/AuthContext";
-import { calculateDistribution } from "@/lib/api";
+import { getPayments } from "@/lib/api";
+import { getMembers } from "@/lib/services/member";
 
 export default function PaymentSplit() {
   const { user, update, uid } = useAuth();
@@ -27,7 +28,9 @@ export default function PaymentSplit() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null);
-  const [payments, setPayments] = useState({});
+  const [memberSummaries, setMemberSummaries] = useState([]);
+  const [grossRevenue, setGrossRevenue] = useState(0);
+  const [totalDebt, setTotalDebt] = useState(0);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [splitAmounts, setSplitAmounts] = useState({});
 
@@ -100,20 +103,25 @@ export default function PaymentSplit() {
     return arr.length ? arr : defaultSplits;
   };
 
-  const calculateSplitAmounts = (paymentsData, currentSplits) => {
-    // Calculate total from all split amounts
-    const total = Object.values(paymentsData).reduce(
-      (sum, amount) => sum + (amount || 0),
-      0,
-    );
-    setTotalRevenue(total);
+  const extractNetPaymentTotal = (paymentList = []) =>
+    paymentList.reduce((sum, payment) => {
+      const amount = Number(payment?.amount || 0);
+      const debt = Number(payment?.debt || 0);
+      const isSuccessful =
+        !payment?.status || String(payment.status).toUpperCase() === "SUCCESS";
+      if (!isSuccessful) return sum;
+      return sum + Math.max(amount - debt, 0);
+    }, 0);
+
+  const calculateSplitAmounts = (baseAmount, currentSplits) => {
+    setTotalRevenue(baseAmount);
 
     const amounts = {};
     currentSplits.forEach((split) => {
       const splitKey = split.key || split.name;
       amounts[splitKey] = {
         name: split.name,
-        amount: paymentsData[splitKey] || 0,
+        amount: (baseAmount * Number(split.value || 0)) / 100,
         percentage: split.value,
         color: split.color,
       };
@@ -126,15 +134,76 @@ export default function PaymentSplit() {
     try {
       const config = user?.paymentConfig;
 
-      // const distribution = await calculateDistribution(config, user?.uid ?? "");
-      // console.log("Calculated distribution:", distribution);
-      // setPayments(distribution.data);
-
       const normalized = normalizeSplits(config);
       setSplits(normalized);
 
-      // Fetch payments and calculate splits
-      // calculateSplitAmounts(distribution.data, normalized);
+      const ownerId = uid ?? user?.uid ?? "";
+      if (!ownerId) {
+        setMemberSummaries([]);
+        setGrossRevenue(0);
+        setTotalDebt(0);
+        calculateSplitAmounts(0, normalized);
+        setStatus(null);
+        return;
+      }
+
+      const memberResponse = await getMembers(1, 1000, ownerId);
+      const members = Array.isArray(memberResponse?.data) ? memberResponse.data : [];
+
+      const paymentSummaries = await Promise.all(
+        members.map(async (member) => {
+          const memberId = member?.uid || member?.id;
+          const memberName = member?.fullname || member?.businessName || "Unnamed member";
+
+          if (!memberId) {
+            return { id: memberName, name: memberName, gross: 0, debt: 0, net: 0 };
+          }
+
+          try {
+            const paymentResponse = await getPayments(memberId);
+            const paymentList = Array.isArray(paymentResponse?.payments)
+              ? paymentResponse.payments
+              : [];
+
+            const gross = paymentList.reduce((sum, payment) => {
+              const amount = Number(payment?.amount || 0);
+              return sum + (Number.isFinite(amount) ? amount : 0);
+            }, 0);
+            const debt = paymentList.reduce((sum, payment) => {
+              const debtValue = Number(payment?.debt || 0);
+              return sum + (Number.isFinite(debtValue) ? debtValue : 0);
+            }, 0);
+            const net = extractNetPaymentTotal(paymentList);
+
+            return {
+              id: memberId,
+              name: memberName,
+              gross,
+              debt,
+              net,
+            };
+          } catch (error) {
+            console.error(`Failed to load payments for member ${memberId}`, error);
+            return {
+              id: memberId,
+              name: memberName,
+              gross: 0,
+              debt: 0,
+              net: 0,
+            };
+          }
+        }),
+      );
+
+      const grossTotal = paymentSummaries.reduce((sum, item) => sum + item.gross, 0);
+      const debtTotal = paymentSummaries.reduce((sum, item) => sum + item.debt, 0);
+      const netTotal = paymentSummaries.reduce((sum, item) => sum + item.net, 0);
+
+      setMemberSummaries(paymentSummaries);
+      setGrossRevenue(grossTotal);
+      setTotalDebt(debtTotal);
+
+      calculateSplitAmounts(netTotal, normalized);
 
       setStatus(null);
     } catch (e) {
@@ -158,8 +227,8 @@ export default function PaymentSplit() {
     );
     setSplits(newSplits);
 
-    // Recalculate split amounts with new percentages
-    calculateSplitAmounts(payments, newSplits);
+    // Recalculate split amounts from the net distributable base.
+    calculateSplitAmounts(totalRevenue, newSplits);
   };
 
   const totalAllocation = splits.reduce((acc, curr) => acc + curr.value, 0);
@@ -264,8 +333,34 @@ export default function PaymentSplit() {
           {currencyFormatter.format(totalRevenue)}
         </h2>
         <p className="mt-1 text-sm text-slate-600">
-          Distribution amount from all payments
+          Net distributable revenue after debt deduction
         </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl bg-slate-50 p-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">
+              Gross payments
+            </p>
+            <p className="mt-1 text-lg font-semibold text-slate-800">
+              {currencyFormatter.format(grossRevenue)}
+            </p>
+          </div>
+          <div className="rounded-xl bg-rose-50 p-3">
+            <p className="text-xs uppercase tracking-wide text-rose-500">
+              Total debt
+            </p>
+            <p className="mt-1 text-lg font-semibold text-rose-700">
+              {currencyFormatter.format(totalDebt)}
+            </p>
+          </div>
+          <div className="rounded-xl bg-emerald-50 p-3">
+            <p className="text-xs uppercase tracking-wide text-emerald-500">
+              Wallet share
+            </p>
+            <p className="mt-1 text-lg font-semibold text-emerald-700">
+              {currencyFormatter.format(splitAmounts.main?.amount || 0)}
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Main Grid: Allocation Editor + Chart */}
@@ -415,6 +510,32 @@ export default function PaymentSplit() {
                   {currencyFormatter.format(totalRevenue)}
                 </span>
               </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-600">
+              Member Payment Check
+            </h4>
+            <div className="mt-3 max-h-72 space-y-2 overflow-auto pr-1">
+              {memberSummaries.length ? (
+                memberSummaries.map((member) => (
+                  <div key={member.id} className="rounded-lg bg-slate-50 p-3 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-medium text-slate-800">{member.name}</span>
+                      <span className="font-semibold text-slate-900">
+                        {currencyFormatter.format(member.net)}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between text-xs text-slate-500">
+                      <span>Gross: {currencyFormatter.format(member.gross)}</span>
+                      <span>Debt: {currencyFormatter.format(member.debt)}</span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-slate-500">No members found for this center.</p>
+              )}
             </div>
           </div>
         </div>

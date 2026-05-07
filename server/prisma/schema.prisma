@@ -84,7 +84,7 @@ model Wallet {
   balance   Float    @default(0.00)
   accountNo String   @unique
   accountName String
-  accountHolderId String
+  accountHolderId String? @default(cuid())
   currency  String
   bank      Json
   createdAt DateTime @default(now())

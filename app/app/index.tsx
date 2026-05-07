@@ -32,7 +32,7 @@ export default function WelcomeScreen() {
         <View style={styles.welcomeSection}>
           <Text style={styles.welcomeTitle}>Welcome to the</Text>
           <Text style={styles.welcomeSubtitle}>
-            Karu Unified Revenue Management System (KURMS)
+            Amac Unified Revenue Management System (AURMS)
           </Text>
           <Text style={styles.welcomeDescription}>
             Streamline your personal or business revenue management with ease

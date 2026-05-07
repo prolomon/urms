@@ -137,7 +137,7 @@ export default function Receipt() {
   const handleShare = async () => {
     try {
       const shareMessage = `
- Karu REVENUE - Digital Receipt
+ Amac REVENUE - Digital Receipt
 Receipt No: ${receiptData?.reference || "N/A"}
 Date: ${receiptData?.date || "N/A"}
 Business: ${receiptData?.businessName || "N/A"}
@@ -238,7 +238,7 @@ Status: ${receiptData?.status || "N/A"}
                 style={styles.logo} 
               />
             </View>
-            <Text style={styles.brand}>Karu REVENUE</Text>
+            <Text style={styles.brand}>Amac REVENUE</Text>
             <Text style={styles.subtitle}>Official Receipt</Text>
 
             <View style={styles.row}>

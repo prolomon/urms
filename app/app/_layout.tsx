@@ -19,7 +19,6 @@ export default function RootLayout() {
           <ToastProvider>
             <Stack>
               <Stack.Screen name="index" options={{ headerShown: false }} />
-              <Stack.Screen name="preference" options={{ headerShown: false }} />
               <Stack.Screen name="login" options={{ headerShown: false }} />
               <Stack.Screen name="receipt" options={{ headerShown: false }} />
               <Stack.Screen name="notification" options={{ headerShown: false }} />

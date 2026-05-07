@@ -173,6 +173,28 @@ const getPaymentByReference = async (req, res) => {
   }
 };
 
+const getPaymentById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ ok: false, message: 'Payment id is required' });
+    }
+
+    const payment = await prisma.payment.findUnique({
+      where: { id },
+    });
+
+    if (!payment) {
+      return res.status(404).json({ ok: false, message: 'Payment not found' });
+    }
+
+    return res.status(200).json({ ok: true, payment });
+  } catch (err) {
+    return res.status(500).json({ ok: false, message: err?.message || 'Server error' });
+  }
+};
+
 const getAllPayments = async (req, res) => {
   try {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
@@ -762,6 +784,7 @@ export {
   createPayment,
   getPaymentsByUserId,
   getPaymentByReference,
+  getPaymentById,
   getAllPayments,
   verifyPayment,
   updatePaymentSchedule,

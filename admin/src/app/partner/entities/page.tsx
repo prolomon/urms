@@ -140,7 +140,7 @@ export default function EntitiesPage() {
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const date = new Date().toISOString().slice(0, 10);
-      const filename = `KARU ENTITY ${date}.csv`;
+      const filename = `AMAC ENTITY ${date}.csv`;
 
       const a = document.createElement("a");
       a.href = url;

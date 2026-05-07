@@ -237,8 +237,6 @@ const getAdmin = async (req, res) => {
         adminEmail: true,
         adminLocation: true,
         adminPhone: true,
-        paystackCustomerId: true,
-        paystackCustomerCode: true,
       },
     });
     if (!admin)
@@ -276,8 +274,6 @@ const getAdminById = async (req, res) => {
         adminEmail: true,
         adminLocation: true,
         adminPhone: true,
-        paystackCustomerId: true,
-        paystackCustomerCode: true,
       },
     });
     if (!admin)
@@ -338,8 +334,6 @@ const updateAdmin = async (req, res) => {
         adminEmail: true,
         adminLocation: true,
         adminPhone: true,
-        paystackCustomerId: true,
-        paystackCustomerCode: true,
       },
     });
 
@@ -433,8 +427,6 @@ const loginAdmin = async (req, res) => {
         adminEmail: true,
         adminLocation: true,
         adminPhone: true,
-        paystackCustomerId: true,
-        paystackCustomerCode: true,
       },
     });
 
