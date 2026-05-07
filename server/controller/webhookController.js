@@ -86,7 +86,7 @@ const nombaWebhook = async (req, res) => {
           gatewayResponse: JSON.stringify(txn || {}),
           customerEmail: event.data?.customer?.accountNumber || null,
           paymentReference: aliasRef,
-          userId: merchantUserId,
+          userId: txn?.aliasAccountReference,
           metadata: event,
           rawPayload: event,
         },
