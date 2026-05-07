@@ -1,8 +1,6 @@
 import crypto from "crypto";
 import { recordWebhookTransaction } from "./transactionController.js";
 import { prisma } from "../config/db.js";
-import { sendEmail } from "../service/mail.js";
-import { createCustomer, createAccount } from "../service/paystack.js";
 
 const nombaWebhook = async (req, res) => {
   try {
@@ -22,31 +20,6 @@ const nombaWebhook = async (req, res) => {
     const merchant = event.data?.merchant || {};
     const aliasRef = txn?.aliasAccountReference || txn?.aliasAccountNumber || null;
     const amount = Number(txn?.transactionAmount ?? 0);
-
-
-    void sendEmail(
-      "taiwooyetade67@gmail.com",
-      "Credited wallet",
-      await accountCreation(
-        "credit alert",
-        "taiwooyetade67@gmail.com",
-        "09046560486",
-      ),
-    )
-      .then((result) => {
-        if (!result?.ok) {
-          console.error(
-            "Welcome email failed:",
-            result?.error || "Unknown email error",
-          );
-        }
-      })
-      .catch((error) => {
-        console.error(
-          "Unexpected email send failure:",
-          error?.message || error,
-        );
-      });
 
     if (!aliasRef) {
       return res.status(400).json({ ok: false, message: 'Missing identifying information (aliasRef)' });
