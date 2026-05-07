@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { recordWebhookTransaction } from "./transactionController.js";
 import { prisma } from "../config/db.js";
+import { sendEmail } from "../service/mail.js";
 
 const nombaWebhook = async (req, res) => {
   try {
