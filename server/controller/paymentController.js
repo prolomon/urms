@@ -537,12 +537,15 @@ const makePayment = async (req, res) => {
 
     // Create payment record
     const payment = await prisma.payment.update({
-      where: { payment: paymentId },
+      where: { id: paymentRecord.id },
       data: {
         debt: (paymentRecord.amount - totalAmount),
-        status: 'PENDING',
+        status: 'SUCCESS',
       },
     });
+
+    console.log('Payment record updated with success status and debt');
+    console.log(payment)
 
     // Update mainWallet (receives main + operation percentages)
     if (mainWallet) {
@@ -600,7 +603,6 @@ const makePayment = async (req, res) => {
             operation: operationAmount,
           },
         },
-        transfers,
       },
     });
   } catch (err) {
