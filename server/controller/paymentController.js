@@ -537,7 +537,7 @@ const makePayment = async (req, res) => {
 
     // Create payment record
     const payment = await prisma.payment.update({
-      where: { payment: paymentRecord.id },
+      where: { payment: paymentId },
       data: {
         debt: (paymentRecord.amount - totalAmount),
         status: 'PENDING',
