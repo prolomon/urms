@@ -150,7 +150,9 @@ const createMember = async (req, res) => {
       });
     }
 
-    const selectedPricing = await findActivePricingForMember(value.pricing || []);
+    const selectedPricing = value.pricing
+
+    console.log("Selected pricing for new member:", selectedPricing);
 
     const { member, initialPayment } = await prisma.$transaction(async (tx) => {
       const createdMember = await tx.member.create({
@@ -174,8 +176,8 @@ const createMember = async (req, res) => {
 
       let createdPayment = null;
 
-      if (selectedPricing) {
-        createdPayment = await createPaymentRecord(
+      for (const pricingId of value.pricing || []) {
+        await createPaymentRecord(
           {
             userId: createdMember.uid,
             frequency: createdMember.billingFrequency,
@@ -183,7 +185,7 @@ const createMember = async (req, res) => {
             debt: 0,
             due: new Date(),
             amount: Number(selectedPricing.price),
-            payment: selectedPricing.id,
+            payment: pricingId,
             status: "PENDING",
             isVerify: false,
             reference: generatePaymentReference(),
@@ -191,6 +193,9 @@ const createMember = async (req, res) => {
           tx,
         );
       }
+
+      console.log("Created member:", createdMember);
+      console.log("Created initial payment:", createdPayment);
 
       return { member: createdMember, initialPayment: createdPayment };
     });
@@ -234,7 +239,7 @@ const createMember = async (req, res) => {
           date: new Date(),
         },
       });
-      
+
     } catch (notificationError) {
       console.error(
         "Failed to create welcome notification:",
@@ -446,6 +451,7 @@ const login = async (req, res) => {
         updatedAt: true,
       },
     });
+
     if (!member) {
       return res
         .status(401)
