@@ -3,7 +3,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { useWallet } from "@/hooks/use-wallet";
 import { AUTH_MEMBER_TOKEN } from "@/lib/api";
-import bankList from "@/lib/jsons/banklist.json";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { RelativePathString, useRouter } from "expo-router";
 import { ArrowLeft, Search } from "lucide-react-native";
@@ -26,16 +25,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getBanks } from "@/lib/services/wallet";
 
-type BankOption = {
-  id: string | number;
-  name: string;
-  code?: string;
-  active?: boolean;
-};
-
-const BANK_OPTIONS: BankOption[] = (bankList as BankOption[])
-  .filter((bank) => bank?.active !== false)
-  .sort((a, b) => a.name.localeCompare(b.name));
 
 export default function TransferScreen() {
   const { verifyCode } = useAuth()
@@ -69,7 +58,6 @@ export default function TransferScreen() {
       const data = await getBanks(token || "");
 
       if (data.ok && data.banks) {
-        console.log("Fetched banks:", data.banks);
         setBankList(data.banks?.data);
       }
     } catch (e) {
