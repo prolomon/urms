@@ -189,9 +189,11 @@ export default function PaymentSplit() {
       );
 
       const paymentResponse = await getPayments();
-      const allPayments = Array.isArray(paymentResponse?.payments)
-        ? paymentResponse.payments
+      const allPayments = Array.isArray(paymentResponse?.data)
+        ? paymentResponse.data
         : [];
+      
+        console.log(allPayments, memberLookup, paymentResponse);
 
       const filteredPayments = allPayments
         .filter((payment) => {
