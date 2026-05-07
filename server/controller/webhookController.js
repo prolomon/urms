@@ -20,6 +20,8 @@ const nombaWebhook = async (req, res) => {
     const merchant = event.data?.merchant || {};
     const aliasRef = txn?.aliasAccountReference || txn?.aliasAccountNumber || null;
     const amount = Number(txn?.transactionAmount ?? 0);
+    const merchantUserId = merchant?.userId || null;
+    const walletId = merchant?.walletId || null;
 
     if (!aliasRef) {
       return res.status(400).json({ ok: false, message: 'Missing identifying information (aliasRef)' });
@@ -31,18 +33,32 @@ const nombaWebhook = async (req, res) => {
 
     let wallet = null;
 
-    // Strategy 1: Find wallet by aliasAccountReference (primary - stored in identification field or bank data)
-    if (aliasRef) {
+    if (walletId) {
+      wallet = await prisma.wallet.findUnique({
+        where: { id: walletId },
+      });
+      console.log('Strategy 1 (merchant.walletId):', wallet ? 'Found' : 'Not found');
+    }
+
+    if (!wallet && merchantUserId) {
       wallet = await prisma.wallet.findFirst({
-        where: {
+        where: { userId: txn?.aliasAccountReference },
+      });
+      console.log('Strategy 2 (merchant.userId):', wallet ? 'Found' : 'Not found');
+    }
+
+    if (!wallet && aliasRef) {
+      wallet = await prisma.wallet.findFirst({
+        where: {      
           OR: [
             { accountNo: txn?.aliasAccountNumber },
             { accountName: txn?.aliasAccountName },
-            { bank: { contains: { id: txn?.aliasAccountReference } } },
+            { identification: aliasRef },
+            { bank: { path: ['id'], equals: txn?.aliasAccountReference } },
           ],
         },
       });
-      console.log('Strategy 1 (aliasAccountReference direct):', wallet ? 'Found' : 'Not found');
+      console.log('Strategy 3 (alias/reference fallback):', wallet ? 'Found' : 'Not found');
     }
 
     if (!wallet) {
@@ -59,7 +75,7 @@ const nombaWebhook = async (req, res) => {
           gatewayResponse: JSON.stringify(txn || {}),
           customerEmail: event.data?.customer?.accountNumber || null,
           paymentReference: aliasRef,
-          userId: txn?.aliasAccountReference,
+          userId: merchantUserId,
           metadata: event,
           rawPayload: event,
         },
