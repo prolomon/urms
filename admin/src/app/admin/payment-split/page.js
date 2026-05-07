@@ -11,7 +11,7 @@ import {
   Legend,
 } from "recharts";
 import { useAuth } from "@/context/AuthContext";
-import { getPayments } from "@/lib/api";
+import { getPayments } from "@/lib/services/payments";
 import { getMembers } from "@/lib/services/member";
 
 export default function PaymentSplit() {
@@ -28,7 +28,7 @@ export default function PaymentSplit() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null);
-  const [memberSummaries, setMemberSummaries] = useState([]);
+  const [paymentChecks, setPaymentChecks] = useState([]);
   const [grossRevenue, setGrossRevenue] = useState(0);
   const [totalDebt, setTotalDebt] = useState(0);
   const [totalRevenue, setTotalRevenue] = useState(0);
@@ -113,6 +113,38 @@ export default function PaymentSplit() {
       return sum + Math.max(amount - debt, 0);
     }, 0);
 
+  const paymentMatchesDebtRules = (payment = {}) => {
+    const amount = Number(payment?.amount || 0);
+    const debt = Number(payment?.debt || 0);
+    const status = String(payment?.status || "").toUpperCase();
+
+    if (status !== "SUCCESS") {
+      return false;
+    }
+
+    if (debt === 0) {
+      return true;
+    }
+
+    return debt !== 0 && debt - amount !== amount;
+  };
+
+  const resolvePaymentName = (payment, memberLookup) => {
+    const userId = payment?.userId || payment?.uid || payment?.memberId || payment?.customerId;
+    const member = memberLookup.get(String(userId || ""));
+
+    return (
+      member?.fullname ||
+      member?.businessName ||
+      payment?.name ||
+      payment?.fullName ||
+      payment?.customerName ||
+      payment?.paymentName ||
+      payment?.reference ||
+      "Unknown user"
+    );
+  };
+
   const calculateSplitAmounts = (baseAmount, currentSplits) => {
     setTotalRevenue(baseAmount);
 
@@ -139,7 +171,7 @@ export default function PaymentSplit() {
 
       const ownerId = uid ?? user?.uid ?? "";
       if (!ownerId) {
-        setMemberSummaries([]);
+        setPaymentChecks([]);
         setGrossRevenue(0);
         setTotalDebt(0);
         calculateSplitAmounts(0, normalized);
@@ -150,56 +182,45 @@ export default function PaymentSplit() {
       const memberResponse = await getMembers(1, 1000, ownerId);
       const members = Array.isArray(memberResponse?.data) ? memberResponse.data : [];
 
-      const paymentSummaries = await Promise.all(
-        members.map(async (member) => {
-          const memberId = member?.uid || member?.id;
-          const memberName = member?.fullname || member?.businessName || "Unnamed member";
-
-          if (!memberId) {
-            return { id: memberName, name: memberName, gross: 0, debt: 0, net: 0 };
-          }
-
-          try {
-            const paymentResponse = await getPayments(memberId);
-            const paymentList = Array.isArray(paymentResponse?.payments)
-              ? paymentResponse.payments
-              : [];
-
-            const gross = paymentList.reduce((sum, payment) => {
-              const amount = Number(payment?.amount || 0);
-              return sum + (Number.isFinite(amount) ? amount : 0);
-            }, 0);
-            const debt = paymentList.reduce((sum, payment) => {
-              const debtValue = Number(payment?.debt || 0);
-              return sum + (Number.isFinite(debtValue) ? debtValue : 0);
-            }, 0);
-            const net = extractNetPaymentTotal(paymentList);
-
-            return {
-              id: memberId,
-              name: memberName,
-              gross,
-              debt,
-              net,
-            };
-          } catch (error) {
-            console.error(`Failed to load payments for member ${memberId}`, error);
-            return {
-              id: memberId,
-              name: memberName,
-              gross: 0,
-              debt: 0,
-              net: 0,
-            };
-          }
-        }),
+      const memberLookup = new Map(
+        members
+          .filter((member) => member?.uid || member?.id)
+          .map((member) => [String(member?.uid || member?.id), member]),
       );
 
-      const grossTotal = paymentSummaries.reduce((sum, item) => sum + item.gross, 0);
-      const debtTotal = paymentSummaries.reduce((sum, item) => sum + item.debt, 0);
-      const netTotal = paymentSummaries.reduce((sum, item) => sum + item.net, 0);
+      const paymentResponse = await getPayments();
+      const allPayments = Array.isArray(paymentResponse?.payments)
+        ? paymentResponse.payments
+        : [];
 
-      setMemberSummaries(paymentSummaries);
+      const filteredPayments = allPayments
+        .filter((payment) => {
+          const userId = payment?.userId || payment?.uid || payment?.memberId || payment?.customerId;
+          return memberLookup.has(String(userId || ""));
+        })
+        .filter(paymentMatchesDebtRules)
+        .map((payment) => {
+          const amount = Number(payment?.amount || 0);
+          const debt = Number(payment?.debt || 0);
+          const net = Math.max(amount - debt, 0);
+          return {
+            id: payment?.reference || `${payment?.userId || "payment"}-${payment?.date || "row"}`,
+            userId: payment?.userId || payment?.uid || payment?.memberId || "",
+            name: resolvePaymentName(payment, memberLookup),
+            reference: payment?.reference || "",
+            status: payment?.status || "",
+            amount,
+            debt,
+            net,
+            date: payment?.date || payment?.createdAt || null,
+          };
+        });
+
+      const grossTotal = filteredPayments.reduce((sum, item) => sum + item.amount, 0);
+      const debtTotal = filteredPayments.reduce((sum, item) => sum + item.debt, 0);
+      const netTotal = filteredPayments.reduce((sum, item) => sum + item.net, 0);
+
+      setPaymentChecks(filteredPayments);
       setGrossRevenue(grossTotal);
       setTotalDebt(debtTotal);
 
@@ -447,6 +468,37 @@ export default function PaymentSplit() {
               </p>
             )}
           </div>
+          
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-600">
+              Member Payment Check
+            </h4>
+            <div className="mt-3 max-h-72 space-y-2 overflow-auto pr-1">
+              {paymentChecks.length ? (
+                paymentChecks.map((payment) => (
+                  <div key={payment.id} className="rounded-lg bg-slate-50 p-3 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-medium text-slate-800">{payment.name}</span>
+                      <span className="font-semibold text-slate-900">
+                        {currencyFormatter.format(payment.net)}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                      <span>Amount: {currencyFormatter.format(payment.amount)}</span>
+                      {payment.debt > 0 ? (
+                        <span>Debt: {currencyFormatter.format(payment.debt)}</span>
+                      ) : null}
+                      {payment.reference ? (
+                        <span>Ref: {payment.reference}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-slate-500">No matching payments found.</p>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Right: Visual Breakdown */}
@@ -510,32 +562,6 @@ export default function PaymentSplit() {
                   {currencyFormatter.format(totalRevenue)}
                 </span>
               </div>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-600">
-              Member Payment Check
-            </h4>
-            <div className="mt-3 max-h-72 space-y-2 overflow-auto pr-1">
-              {memberSummaries.length ? (
-                memberSummaries.map((member) => (
-                  <div key={member.id} className="rounded-lg bg-slate-50 p-3 text-sm">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="font-medium text-slate-800">{member.name}</span>
-                      <span className="font-semibold text-slate-900">
-                        {currencyFormatter.format(member.net)}
-                      </span>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between text-xs text-slate-500">
-                      <span>Gross: {currencyFormatter.format(member.gross)}</span>
-                      <span>Debt: {currencyFormatter.format(member.debt)}</span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-slate-500">No members found for this center.</p>
-              )}
             </div>
           </div>
         </div>
