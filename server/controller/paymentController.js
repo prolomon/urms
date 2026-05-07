@@ -510,16 +510,16 @@ const makePayment = async (req, res) => {
       return res.status(500).json({ ok: false, message: 'Payment configuration is incomplete' });
     }
 
-    if (senderWallet && senderWallet.balance < amount) {
-      return res.status(400).json({ ok: false, message: 'Insufficient balance in sender wallet' });
-    }
-
     // Parse payment config for split percentages
     const paymentConfig = main.paymentConfig || { main: 40, agent: 20, operation: 25, technology: 15 };
     const grossAmount = Number(amount);
     const feePercentage = 0.05; // 5% fee
     const fee = grossAmount * feePercentage;
     const totalAmount = grossAmount - fee;
+
+    if (senderWallet && Number(senderWallet.balance) < grossAmount) {
+      return res.status(400).json({ ok: false, message: 'Insufficient balance in sender wallet' });
+    }
 
     // Calculate split amounts
     const mainAmount = (totalAmount * paymentConfig.main) / 100; // 40% → mainWallet
@@ -531,7 +531,7 @@ const makePayment = async (req, res) => {
 
     // Create payment record
     const payment = await prisma.payment.update({
-      where: { id: paymentId }, 
+      where: { id: paymentId },
       data: {
         debt: (paymentRecord.amount - totalAmount),
         status: 'PENDING',
@@ -568,7 +568,7 @@ const makePayment = async (req, res) => {
         where: { id: senderWallet.id },
         data: {
           balance: {
-            decrement: totalAmount,
+            decrement: grossAmount,
           },
         },
       });
