@@ -29,6 +29,7 @@ export type Admin = {
   adminEmail?: string;
   adminPhone?: string;
   adminLocation?: string;
+  ledger?: string;
 };
 
 export type CreateAdminInput = Pick< Admin, | "center" | "email" | "password" | "location" | "state" | "address" | "lga" | "country" > & {

@@ -244,9 +244,6 @@ export default function OrganizationsPage() {
                     Phone
                   </th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:px-6 md:text-sm">
-                    Location
-                  </th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:px-6 md:text-sm">
                     Status
                   </th>
                 </tr>
@@ -280,9 +277,6 @@ export default function OrganizationsPage() {
                       </td>
                       <td className="px-4 py-4 text-xs text-slate-600 md:px-6 md:text-sm">
                         {organization.phone || "—"}
-                      </td>
-                      <td className="px-4 py-4 text-xs text-slate-600 md:px-6 md:text-sm capitalize">
-                        {organization.location || "—"}
                       </td>
                       <td className="px-4 py-4 md:px-6">
                         <span

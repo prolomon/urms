@@ -24,6 +24,7 @@ import { Transaction } from "@/lib/services/wallet";
 
 function WalletPage() {
     const router = useRouter();
+    const [load, setLoad] = useState(false);
     const [query, setQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<"all" | WalletTransactionStatus>("all");
     const [typeFilter, setTypeFilter] = useState<"all" | WalletTransactionType>("all");
@@ -31,15 +32,14 @@ function WalletPage() {
     const { user } = useAuth();
     const { wallet, isWallet, loading, error, message, refresh, setUid, getTransactions } = useWallet();
     const [transactions, setTransactions] = useState<Transaction[]>([]);
-    const [toDate, setToDate] = useState(new Date().toISOString().split("T")[0]);
-    const [fromDate, setFromDate] = useState(
-        new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
-    );
+    const [toDate, setToDate] = useState(() => new Date().toISOString().split("T")[0]);
+    const [fromDate, setFromDate] = useState(() => new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]);
 
     const fetChTransactions = useCallback(async () => {
+        setLoad(true);
         if (wallet) {
             try {
-                const res = await getTransactions(wallet.accountNo, fromDate, toDate);
+                const res = await getTransactions(user.uid);
                 if (res.ok && res.transactions?.data?.results) {
                     setTransactions(res.transactions.data.results);
                 } else {
@@ -48,9 +48,11 @@ function WalletPage() {
             } catch (error) {
                 console.error("Error fetching transactions:", error);
                 setTransactions([]);
+            } finally {
+                setLoad(false);
             }
         }
-    }, [wallet, getTransactions, fromDate, toDate]);
+    }, [wallet, getTransactions, user.uid]);
 
     useEffect(() => {
         fetChTransactions();
@@ -79,32 +81,61 @@ function WalletPage() {
         }).format(value);
     };
 
+    const filteredTransactions = useMemo(() => {
+        const queryValue = query.trim().toLowerCase();
+
+        return transactions.filter((item) => {
+            const itemEvent = String(item?.event || "").toLowerCase();
+            const itemStatus = String(item?.status || "").toLowerCase();
+            const itemDate = new Date(item?.createdAt || item?.updatedAt || "");
+
+            const matchesQuery = !queryValue || [
+                item?.reference,
+                item?.id,
+                item?.paymentReference,
+                item?.customerEmail,
+            ]
+                .filter(Boolean)
+                .some((value) => String(value).toLowerCase().includes(queryValue));
+
+            const matchesStatus =
+                statusFilter === "all" || itemStatus === statusFilter.toLowerCase();
+
+            const matchesType =
+                typeFilter === "all" || itemEvent === typeFilter.toLowerCase();
+
+            const matchesDate = (() => {
+                if (Number.isNaN(itemDate.getTime())) return true;
+                const from = fromDate ? new Date(fromDate) : null;
+                const to = toDate ? new Date(toDate) : null;
+                if (from && itemDate < from) return false;
+                if (to) {
+                    const endOfDay = new Date(to);
+                    endOfDay.setHours(23, 59, 59, 999);
+                    if (itemDate > endOfDay) return false;
+                }
+                return true;
+            })();
+
+            return matchesQuery && matchesStatus && matchesType && matchesDate;
+        });
+    }, [transactions, query, statusFilter, typeFilter, fromDate, toDate]);
+
     // This is for the balance calculations, we can connect this to the backend later
     const balances = useMemo(() => {
-        const successfulCredits = transactions
-            .filter((item) => (item.type || "").toLowerCase() === "credit" && (item.status || "").toLowerCase() === "success")
-            .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-
-        const successfulDebits = transactions
-            .filter((item) => (item.type || "").toLowerCase() === "debit" && (item.status || "").toLowerCase() === "success")
-            .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-
-        const pendingDebits = transactions
-            .filter((item) => (item.type || "").toLowerCase() === "debit" && (item.status || "").toLowerCase() === "pending")
-            .reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
         const walletBalance = Number(wallet?.balance ?? 0);
         const available = Number.isFinite(walletBalance) ? walletBalance : 0;
-        const ledger = available - pendingDebits;
+        const ledger = available;
 
         return {
             available,
             ledger,
-            pendingDebits,
-            totalInflow: successfulCredits,
-            totalOutflow: successfulDebits,
+            pendingDebits: 0,
+            totalInflow: 0,
+            totalOutflow: 0,
         };
-    }, [wallet?.balance, transactions]);
+    }, [wallet?.balance]);
 
     // This is the function to handle copying account details to clipboard
     const handleCopyAccountDetails = async () => {
@@ -126,8 +157,9 @@ function WalletPage() {
     };
 
     // This is to refresh wallet data after creating wallet or when the page loads
-    const statusBadge = (status: WalletTransactionStatus) => {
-        if (status === "SUCCESS") {
+    const statusBadge = (status: any) => {
+        const statusStr = String(status || "").toUpperCase();
+        if (statusStr === "SUCCESS" || statusStr === "1") {
             return (
                 <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                     <CheckCircle2 className="h-3.5 w-3.5" />
@@ -136,7 +168,7 @@ function WalletPage() {
             );
         }
 
-        if (status === "PENDING") {
+        if (statusStr === "PENDING" || statusStr === "0") {
             return (
                 <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
                     <Clock3 className="h-3.5 w-3.5" />
@@ -145,7 +177,7 @@ function WalletPage() {
             );
         }
 
-        if (status === "REFUNDED") {
+        if (statusStr === "REFUNDED" || statusStr === "3") {
             return (
                 <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700">
                     <Clock3 className="h-3.5 w-3.5" />
@@ -255,7 +287,7 @@ function WalletPage() {
                 </div>
                 <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-100 shadow-sm">
                     <p className="text-xs uppercase tracking-wide text-slate-500">Ledger Balance</p>
-                    <p className="mt-2 text-2xl font-bold text-slate-900">{formatCurrency(balances.ledger)}</p>
+                    <p className="mt-2 text-2xl font-bold text-slate-900">{formatCurrency(user.ledger || 0.00)}</p>
                     <p className="text-xs text-slate-500 mt-1">Includes pending wallet movements</p>
                 </div>
                 <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-100 shadow-sm">
@@ -277,7 +309,7 @@ function WalletPage() {
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                     <div>
                         <h2 className="text-lg font-semibold text-slate-900">Transactions</h2>
-                        <p className="text-sm text-slate-500">{transactions.length} result(s)</p>
+                        <p className="text-sm text-slate-500">{filteredTransactions.length} result(s)</p>
                     </div>
                     <button
                         type="button"
@@ -376,19 +408,19 @@ function WalletPage() {
                             </tr>
                         </thead>
                         <tbody>
-                            {transactions.length === 0 ? (
+                            {filteredTransactions.length === 0 ? (
                                 <tr>
                                     <td className="py-8 text-center text-sm text-slate-500" colSpan={5}>
                                         No transactions match your filters.
                                     </td>
                                 </tr>
                             ) : (
-                                transactions.map((item) => (
+                                filteredTransactions.map((item) => (
                                     <tr key={item.id} className="border-b border-slate-100 last:border-b-0">
-                                        <td className="py-4 text-sm font-medium text-slate-800"><Link href={`/admin/transactions/${item.id}`}>{item.sessionId}</Link></td>
-                                        <td className="py-4 text-sm text-slate-600">{item.type}</td>
+                                        <td className="py-4 text-sm font-medium text-slate-800"><Link href={`/admin/transactions/${item.id}`}>{item.reference || item.id}</Link></td>
+                                        <td className="py-4 text-sm text-slate-600 capitalize">{item.event || "transaction"}</td>
                                         <td className="py-4 text-sm text-slate-600">
-                                            {new Date(item.timeCreated || item.timeUpdated).toLocaleString("en-NG", {
+                                            {new Date(item.createdAt || item.updatedAt).toLocaleString("en-NG", {
                                                 year: "numeric",
                                                 month: "short",
                                                 day: "numeric",
@@ -396,19 +428,19 @@ function WalletPage() {
                                                 minute: "2-digit",
                                             })}
                                         </td>
-                                        <td className="py-4 text-sm">{statusBadge((item.status || "").toUpperCase() as WalletTransactionStatus)}</td>
+                                        <td className="py-4 text-sm">{statusBadge(item.status)}</td>
                                         <td
-                                            className={`py-4 text-right text-sm font-semibold ${(item.type || "").toLowerCase() === "credit" ? "text-emerald-700" : "text-rose-700"
+                                            className={`py-4 text-right text-sm font-semibold ${(item.event || "").toLowerCase() === "credit" ? "text-emerald-700" : "text-rose-700"
                                                 }`}
                                         >
                                             <span className="inline-flex items-center gap-1.5">
-                                                {(item.type || "").toLowerCase() === "credit" ? (
+                                                {(item.event || "").toLowerCase() === "credit" ? (
                                                     <ArrowDownLeft className="h-4 w-4" />
                                                 ) : (
                                                     <ArrowUpRight className="h-4 w-4" />
                                                 )}
-                                                {(item.type || "").toLowerCase() === "credit" ? "+" : "-"}
-                                                {formatCurrency(Number(item.amount || 0))}
+                                                {(item.event || "").toLowerCase() === "credit" ? "+" : "-"}
+                                                {formatCurrency(Math.abs(Number(item.amount || 0)))}
                                             </span>
                                         </td>
                                     </tr>

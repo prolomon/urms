@@ -7,11 +7,61 @@ import {
 } from '../validator/paymentValidator.js';
 import { customAlphabet } from 'nanoid';
 import { initiateTransfer, createRecipient } from '../service/paystack.js';
+import { generateTransactionReference } from './paymentTransactionController.js';
 
 const paymentReferenceSuffix = customAlphabet('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ', 8);
 
 const generatePaymentReference = () => {
   return `PAY-REF|${new Date().toISOString()}-${paymentReferenceSuffix()}`;
+};
+
+const getWalletBankDetails = (wallet) => {
+  const bank = wallet?.bank || {};
+
+  return {
+    accountNumber: wallet?.accountNo || null,
+    accountName: wallet?.accountName || null,
+    bankName: bank?.name || null,
+    bankCode: bank?.code || null,
+  };
+};
+
+const generateReceipt = ({
+  reference,
+  paymentRecord,
+  grossAmount,
+  fee,
+  netAmount,
+  mainAmount,
+  agentAmount,
+  technologyAmount,
+  operationAmount,
+  senderWallet,
+  mainWallet,
+  agentWallet,
+}) => {
+  const sender = getWalletBankDetails(senderWallet);
+
+  return {
+    reference,
+    paymentReference: paymentRecord.reference,
+    paymentId: paymentRecord.id,
+    date: new Date().toISOString(),
+    grossAmount,
+    fee,
+    netAmount,
+    sender,
+    recipients: {
+      admin: getWalletBankDetails(mainWallet),
+      agent: getWalletBankDetails(agentWallet),
+    },
+    breakdown: {
+      main: mainAmount,
+      agent: agentAmount,
+      technology: technologyAmount,
+      operation: operationAmount,
+    },
+  };
 };
 
 const normalizeSessions = (value) => {
@@ -356,7 +406,6 @@ const updatePaymentSchedule = async (req, res) => {
 
 const makePayment = async (req, res) => {
   try {
-
     const { error, value } = makePaymentSchema.validate(req.body, { abortEarly: false });
     if (error) {
       const errors = error.details.map((detail) => detail.message);
@@ -370,143 +419,116 @@ const makePayment = async (req, res) => {
     const { amount, center, company } = value;
     const { userId, paymentId } = req.params;
 
-    const pricing = await prisma.pricing.findFirst({
-      where: { id: paymentId },
-      select: {
-        status: true,
-        id: true,
-        title: true,
-        price: true,
-        category: true,
-        type: true,
-        benefit: true,
-        center: true,
-        createdAt: true,
-        updatedAt: true,
-      }
-    });
-
-    console.log(pricing);
-
-    const paymentRecord = await prisma.payment.findFirst({
-      where: { payment: paymentId },
-      select: {
-        id: true,
-        reference: true,
-        userId: true,
-        frequency: true,
-        sessions: true,
-        debt: true,
-        due: true,
-        amount: true,
-        payment: true,
-        status: true,
-        isVerify: true,
-        createdAt: true,
-        updatedAt: true,
-      }
-    });
-
-    console.log(paymentRecord);
-
-    console.log(paymentId, userId, amount, center, company);
+    const [paymentRecord, main, mainWallet, agentWallet, senderWallet] = await Promise.all([
+      prisma.payment.findFirst({
+        where: { payment: paymentId },
+        select: {
+          id: true,
+          reference: true,
+          userId: true,
+          frequency: true,
+          sessions: true,
+          debt: true,
+          due: true,
+          amount: true,
+          payment: true,
+          status: true,
+          isVerify: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      prisma.admin.findFirst({
+        where: { uid: center },
+        select: {
+          id: true,
+          uid: true,
+          center: true,
+          email: true,
+          password: true,
+          avatar: true,
+          role: true,
+          paymentConfig: true,
+          createdAt: true,
+          updatedAt: true,
+          location: true,
+          state: true,
+          address: true,
+          lga: true,
+          country: true,
+          status: true,
+          phone: true,
+          adminName: true,
+          adminEmail: true,
+          adminLocation: true,
+          adminPhone: true,
+        },
+      }),
+      prisma.wallet.findFirst({
+        where: { userId: company, role: 'ADMIN' },
+        select: {
+          id: true,
+          userId: true,
+          status: true,
+          role: true,
+          accountHolderId: true,
+          createdAt: true,
+          updatedAt: true,
+          balance: true,
+          accountNo: true,
+          accountName: true,
+          currency: true,
+          bank: true,
+          identification: true,
+          verify: true,
+        },
+      }),
+      prisma.wallet.findFirst({
+        where: { userId: company, role: 'AGENT' },
+        select: {
+          id: true,
+          userId: true,
+          status: true,
+          role: true,
+          createdAt: true,
+          updatedAt: true,
+          balance: true,
+          accountNo: true,
+          accountHolderId: true,
+          accountName: true,
+          currency: true,
+          bank: true,
+          identification: true,
+          verify: true,
+        },
+      }),
+      prisma.wallet.findFirst({
+        where: {
+          userId,
+          role: 'USER',
+        },
+        select: {
+          id: true,
+          userId: true,
+          status: true,
+          role: true,
+          createdAt: true,
+          updatedAt: true,
+          balance: true,
+          accountNo: true,
+          accountName: true,
+          currency: true,
+          accountHolderId: true,
+          bank: true,
+          identification: true,
+          verify: true,
+        },
+      }),
+    ]);
 
     if (!paymentRecord) {
       return res.status(404).json({ ok: false, message: 'Payment record not found' });
     }
-
-    const main = await prisma.admin.findFirst({
-      where: { uid: center },
-      select: {
-        id: true,
-        uid: true,
-        center: true,
-        email: true,
-        password: true,
-        avatar: true,
-        role: true,
-        paymentConfig: true,
-        createdAt: true,
-        updatedAt: true,
-        location: true,
-        state: true,
-        address: true,
-        lga: true,
-        country: true,
-        status: true,
-        phone: true,
-        adminName: true,
-        adminEmail: true,
-        adminLocation: true,
-        adminPhone: true,
-      },
-    });
-
-    const mainWallet = await prisma.wallet.findFirst({
-      where: { userId: company, role: 'ADMIN' },
-      select: {
-        id: true,
-        userId: true,
-        status: true,
-        role: true,
-        accountHolderId: true,
-        createdAt: true,
-        updatedAt: true,
-        balance: true,
-        accountNo: true,
-        accountName: true,
-        currency: true,
-        bank: true,
-        status: true,
-        identification: true,
-        verify: true,
-      },
-    });
-
-    const agentWallet = await prisma.wallet.findFirst({
-      where: { userId: company, role: 'AGENT' },
-      select: {
-        id: true,
-        userId: true,
-        status: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true,
-        balance: true,
-        accountNo: true,
-        accountHolderId: true,
-        accountName: true,
-        currency: true,
-        bank: true,
-        status: true,
-        identification: true,
-        verify: true,
-      },
-    });
-
-    const senderWallet = await prisma.wallet.findFirst({
-      where: {
-        userId,
-        role: 'USER',
-      },
-      select: {
-        id: true,
-        userId: true,
-        status: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true,
-        balance: true,
-        accountNo: true,
-        accountName: true,
-        currency: true,
-        accountHolderId: true,
-        bank: true,
-        status: true,
-        identification: true,
-        verify: true,
-      },
-    });
 
     if (!main) {
       return res.status(500).json({ ok: false, message: 'Main admin not found' });
@@ -522,66 +544,171 @@ const makePayment = async (req, res) => {
     const feePercentage = 0.05; // 5% fee
     const fee = grossAmount * feePercentage;
     const totalAmount = grossAmount - fee;
+    const receiptReference = generateTransactionReference();
 
     if (senderWallet && Number(senderWallet.balance) < grossAmount) {
       return res.status(400).json({ ok: false, message: 'Insufficient balance in sender wallet' });
     }
 
     // Calculate split amounts
-    const mainAmount = (totalAmount * paymentConfig.main) / 100; // 40% → mainWallet
-    const agentAmount = (totalAmount * paymentConfig.agent) / 100; // 20% → agentWallet
-    const technologyAmount = (totalAmount * paymentConfig.technology) / 100; // 15% → agentWallet
-    const operationAmount = (totalAmount * paymentConfig.operation) / 100; // 25% → mainWallet
+    const mainShare = Number(paymentConfig.main ?? 0);
+    const agentShare = Number(paymentConfig.agent ?? 0);
+    const technologyShare = Number(paymentConfig.technology ?? 0);
+    const operationShare = Number(paymentConfig.operation ?? 0);
 
-    const paymentReference = generatePaymentReference();
-
-    // Create payment record
-    const payment = await prisma.payment.update({
-      where: { id: paymentRecord.id },
-      data: {
-        debt: (paymentRecord.amount - totalAmount),
-        status: 'SUCCESS',
-      },
+    const mainAmount = (totalAmount * mainShare) / 100;
+    const agentAmount = (totalAmount * agentShare) / 100;
+    const technologyAmount = (totalAmount * technologyShare) / 100;
+    const operationAmount = (totalAmount * operationShare) / 100;
+    const senderDetails = getWalletBankDetails(senderWallet);
+    const receipt = generateReceipt({
+      reference: receiptReference,
+      paymentRecord,
+      grossAmount,
+      fee,
+      netAmount: totalAmount,
+      mainAmount,
+      agentAmount,
+      technologyAmount,
+      operationAmount,
+      senderWallet,
+      mainWallet,
+      agentWallet,
     });
 
-    console.log('Payment record updated with success status and debt');
-    console.log(payment)
-
-    // Update mainWallet (receives main + operation percentages)
-    if (mainWallet) {
-      await prisma.wallet.update({
-        where: { id: mainWallet.id },
+    const payment = await prisma.$transaction(async (tx) => {
+      const updatedPayment = await tx.payment.update({
+        where: { id: paymentRecord.id },
         data: {
-          balance: {
-            increment: mainAmount + operationAmount,
-          },
+          debt: paymentRecord.amount - totalAmount,
+          status: 'SUCCESS',
         },
       });
-    }
 
-    // Update agentWallet (receives agent + technology percentages)
-    if (agentWallet) {
-      await prisma.wallet.update({
-        where: { id: agentWallet.id },
-        data: {
-          balance: {
-            increment: agentAmount + technologyAmount,
+      if (mainWallet) {
+        await tx.wallet.update({
+          where: { id: mainWallet.id },
+          data: {
+            balance: {
+              increment: mainAmount + operationAmount,
+            },
           },
-        },
-      });
-    }
+        });
+      }
 
-    // Deduct from senderWallet
-    if (senderWallet) {
-      await prisma.wallet.update({
-        where: { id: senderWallet.id },
-        data: {
-          balance: {
-            decrement: grossAmount,
+      if (agentWallet) {
+        await tx.wallet.update({
+          where: { id: agentWallet.id },
+          data: {
+            balance: {
+              increment: agentAmount + technologyAmount,
+            },
           },
-        },
-      });
-    }
+        });
+      }
+
+      if (senderWallet) {
+        await tx.wallet.update({
+          where: { id: senderWallet.id },
+          data: {
+            balance: {
+              decrement: grossAmount,
+            },
+          },
+        });
+      }
+
+      if (main) {
+        await tx.admin.update({
+          where: { id: main.id },
+          data: {
+            ledger: {
+              increment: mainAmount,
+            },
+          },
+        });
+      }
+
+      await Promise.all([
+        tx.transaction.create({
+          data: {
+            reference: `${receiptReference}-ADMIN`,
+            merchantTxRef: main.uid,
+            event: 'payment.admin.credit',
+            status: 'SUCCESS',
+            amount: mainAmount + operationAmount,
+            currency: 'NGN',
+            channel: 'wallet',
+            gatewayResponse: 'Admin wallet credited',
+            customerEmail: main.adminEmail || main.email || null,
+            paymentId: paymentRecord.id,
+            userId: main.uid,
+            metadata: {
+              receipt,
+              role: 'ADMIN',
+              transactionType: 'CREDIT',
+              creditedAmount: mainAmount + operationAmount,
+              senderAccountNumber: senderDetails.accountNumber,
+              senderBankName: senderDetails.bankName,
+              senderBankCode: senderDetails.bankCode,
+              senderName: senderDetails.accountName,
+            },
+          },
+        }),
+        tx.transaction.create({
+          data: {
+            reference: `${receiptReference}-AGENT`,
+            merchantTxRef: company,
+            event: 'payment.agent.credit',
+            status: 'SUCCESS',
+            amount: agentAmount + technologyAmount,
+            currency: 'NGN',
+            channel: 'wallet',
+            gatewayResponse: 'Agent wallet credited',
+            customerEmail: agentWallet?.accountName || null,
+            paymentId: paymentRecord.id,
+            userId: company,
+            metadata: {
+              receipt,
+              role: 'AGENT',
+              transactionType: 'CREDIT',
+              creditedAmount: agentAmount + technologyAmount,
+              senderAccountNumber: senderDetails.accountNumber,
+              senderBankName: senderDetails.bankName,
+              senderBankCode: senderDetails.bankCode,
+              senderName: senderDetails.accountName,
+            },
+          },
+        }),
+        tx.transaction.create({
+          data: {
+            reference: `${receiptReference}-SENDER`,
+            merchantTxRef: userId,
+            event: 'payment.sender.debit',
+            status: 'SUCCESS',
+            amount: grossAmount,
+            currency: 'NGN',
+            channel: 'wallet',
+            gatewayResponse: 'Sender wallet debited',
+            customerEmail: senderWallet?.accountName || null,
+            paymentId: paymentRecord.id,
+            userId: senderWallet?.userId || userId,
+            metadata: {
+              receipt,
+              role: 'SENDER',
+              transactionType: 'DEBIT',
+              debitedAmount: grossAmount,
+              senderAccountNumber: senderDetails.accountNumber,
+              senderBankName: senderDetails.bankName,
+              senderBankCode: senderDetails.bankCode,
+              senderName: senderDetails.accountName,
+            },
+          },
+        }),
+      ]);
+
+      return updatedPayment;
+    });
 
     return res.status(201).json({
       ok: true,
@@ -603,6 +730,7 @@ const makePayment = async (req, res) => {
             operation: operationAmount,
           },
         },
+        receipt,
       },
     });
   } catch (err) {

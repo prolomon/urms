@@ -45,7 +45,7 @@ const app = express();
 const bodySizeLimit = process.env.BODY_SIZE_LIMIT || "10mb";
 
 // Trust proxy - required for Render and other hosting platforms
-app.set("trust proxy", 1);
+app.set("trust proxy", true);
 
 // Middleware
 app.use(

@@ -167,7 +167,10 @@ const initiateTransferController = async (req, res) => {
       return validationErrorResponse(res, error);
     }
 
-    const { amount, accountNumber, accountName, bankCode, merchantTxRef, senderName, narration } = value;
+    const { amount, accountNumber, accountName, bankCode, senderName, narration } = value;
+
+    // Use authenticated user's UID as merchant transaction reference
+    const merchantTxRef = req.userId;
 
     const result = await initiateTransfer(amount, accountNumber, accountName, bankCode, merchantTxRef, senderName, narration);
 
@@ -177,6 +180,42 @@ const initiateTransferController = async (req, res) => {
         message: result?.message || "Failed to initiate transfer",
         data: result?.data || null,
       });
+    }
+
+    try {
+      const txnRef = (result?.data && (result.data.reference || result.data.transferCode || result.data.id)) || `${merchantTxRef}-${Date.now()}`;
+      const txnStatus = (result?.data && (String(result.data.status || '').toUpperCase() === 'SUCCESS' || result?.status)) ? 'SUCCESS' : 'PENDING';
+      const senderBank = req.user?.wallet?.bank || req.user?.bank || null;
+
+      await prisma.transaction.create({
+        data: {
+          reference: String(txnRef),
+          merchantTxRef,
+          event: 'transfer.initiated',
+          status: txnStatus,
+          amount: Number(amount),
+          currency: result?.data?.currency || 'NGN',
+          channel: 'bank',
+          gatewayResponse: result?.message || null,
+          customerEmail: req.user?.email || null,
+          paymentId: null,
+          userId: merchantTxRef,
+          metadata: {
+            accountNumber,
+            accountName,
+            bankCode,
+            senderAccountNumber: senderBank?.accountNo || null,
+            senderBankName: senderBank?.name || null,
+            senderBankCode: senderBank?.code || null,
+            senderName: req.user?.fullname || req.user?.name || senderName || null,
+            bankName: result?.data?.bankName || null,
+            merchantTxRef,
+            raw: result?.data || null,
+          },
+        },
+      });
+    } catch (txErr) {
+      console.error('Failed to record transfer transaction:', txErr?.message || txErr);
     }
 
     return res.status(200).json({

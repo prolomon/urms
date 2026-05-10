@@ -265,19 +265,19 @@ export default function EntitiesPage() {
             <table className="min-w-max w-full text-left">
               <thead className="border-b border-slate-200">
                 <tr>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:px-6 md:text-sm">
+                  <th className="py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:text-sm">
                     Entity ID
                   </th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:px-6 md:text-sm">
+                  <th className="py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:text-sm">
                     Business Name
                   </th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:px-6 md:text-sm">
+                  <th className="py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:text-sm">
                     Category
                   </th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:px-6 md:text-sm">
+                  <th className="py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:text-sm">
                     Type
                   </th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:px-6 md:text-sm">
+                  <th className="py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:text-sm">
                     Email
                   </th>
                 </tr>
@@ -289,7 +289,7 @@ export default function EntitiesPage() {
                       key={entity.uid}
                       className="transition-colors hover:bg-slate-50"
                     >
-                      <td className="px-4 py-4 font-mono text-xs md:px-6 md:text-sm">
+                      <td className="py-4 font-mono text-xs md:text-sm">
                         <Link
                           href={`/admin/entities/${entity.uid}`}
                           className="rounded-lg text-xs font-medium text-slate-600 transition-colors hover:text-emerald-600 md:text-sm"
@@ -297,10 +297,10 @@ export default function EntitiesPage() {
                           {entity.uid}
                         </Link>
                       </td>
-                      <td className="px-4 py-4 text-xs font-medium text-slate-900 md:px-6 md:text-sm truncate capitalize">
+                      <td className="py-4 text-xs font-medium text-slate-900 md:text-sm truncate capitalize">
                         {entity.businessName || entity.fullname}
                       </td>
-                      <td className="px-4 py-4 md:px-6">
+                      <td className="py-4">
                         <span
                           className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${categoryBadgeClass(
                             entity.category || "",
@@ -309,7 +309,7 @@ export default function EntitiesPage() {
                           {entity.category || "—"}
                         </span>
                       </td>
-                      <td className="px-4 py-4 md:px-6">
+                      <td className="py-4">
                         <span
                           className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${typeBadgeClass(
                             entity.type || "",
@@ -318,14 +318,14 @@ export default function EntitiesPage() {
                           {entity.type || "—"}
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-xs text-slate-600 md:px-6 md:text-sm">
+                      <td className="py-4 text-xs text-slate-600 md:text-sm">
                         {entity.email || "—"}
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center md:px-6">
+                    <td colSpan={6} className="py-8 text-center">
                       <p className="text-slate-500 text-sm">
                         No entities found
                       </p>

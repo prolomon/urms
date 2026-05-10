@@ -40,8 +40,11 @@ const createTransactionSchema = Joi.object({
   customerEmail: Joi.string().email().trim().optional().allow(null, '').messages({
     'string.email': 'Customer email must be valid',
   }),
-  paymentReference: Joi.string().trim().optional().allow(null, '').messages({
-    'string.base': 'Payment reference must be a string',
+  merchantTxRef: Joi.string().trim().optional().allow(null, '').messages({
+    'string.base': 'Merchant transaction reference must be a string',
+  }),
+  paymentId: Joi.string().trim().optional().allow(null, '').messages({
+    'string.base': 'Payment ID must be a string',
   }),
   userId: Joi.string().trim().optional().allow(null, '').messages({
     'string.base': 'User ID must be a string',

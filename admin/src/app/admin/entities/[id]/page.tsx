@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, use, useCallback, useRef } from "react";
+import { useEffect, useState, use, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Edit2,
@@ -27,7 +27,7 @@ import {
   changeCompany,
 } from "@/lib/services/member";
 import { getPayments } from "@/lib/api";
-import { getPricing, getPricingByCenter, Pricing } from "@/lib/services/pricing";
+import { getPricingByCenter, Pricing } from "@/lib/services/pricing";
 import { useAuth } from "@/context/AuthContext";
 import { getWallet, Wallet as WalletType } from "@/lib/services/wallet";
 import { Agent, getAgents } from "@/lib/services/agent";

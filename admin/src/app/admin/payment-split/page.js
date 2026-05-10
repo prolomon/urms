@@ -21,7 +21,6 @@ export default function PaymentSplit() {
     { key: "main", name: "Main Account", value: 70, color: "#10b981" },
     { key: "agent", name: "Agent Commission", value: 15, color: "#3b82f6" },
     { key: "technology", name: "Technology Fund", value: 10, color: "#8b5cf6" },
-    { key: "operation", name: "Operational Costs", value: 5, color: "#f59e0b" },
   ];
 
   const [splits, setSplits] = useState(defaultSplits);
@@ -54,53 +53,61 @@ export default function PaymentSplit() {
   ];
 
   const keyToDisplay = {
-    admin: "Main Account",
+    main: "Main Account",
     agent: "Agent Commission",
     technology: "Technology Fund",
-    operation: "Operational Costs",
   };
 
   const displayToKey = {
-    "Main Account": "admin",
+    "Main Account": "main",
     "Agent Commission": "agent",
     "Technology Fund": "technology",
-    "Operational Costs": "operation",
   };
 
   const normalizeSplits = (config) => {
+    // Only allow these three split keys (in this order)
+    const allowedKeys = ["main", "agent", "technology"];
+    const synonyms = { admin: "main" };
+
+    const toKey = (k) => {
+      if (!k) return undefined;
+      const low = String(k).toLowerCase();
+      if (allowedKeys.includes(low)) return low;
+      if (synonyms[low]) return synonyms[low];
+      return undefined;
+    };
+
     if (!config) return defaultSplits;
-    let arr = [];
+
+    const itemsMap = new Map();
 
     if (Array.isArray(config)) {
-      arr = config.map((item, idx) => ({
-        key:
-          item?.key ||
-          displayToKey[item?.name] ||
-          displayToKey[item?.label] ||
-          undefined,
-        name:
-          item?.name ||
-          keyToDisplay[item?.key] ||
-          item?.label ||
-          `Split ${idx + 1}`,
-        value:
-          typeof item?.value === "number"
-            ? item.value
-            : typeof item?.percentage === "number"
-              ? item.percentage
-              : 0,
-        color: item?.color || colorPalette[idx % colorPalette.length],
-      }));
+      config.forEach((item, idx) => {
+        const rawKey = item?.key || item?.name || item?.label;
+        const key = toKey(rawKey);
+        const value = typeof item?.value === "number" ? item.value : typeof item?.percentage === "number" ? item.percentage : 0;
+        const name = item?.name || keyToDisplay[key] || item?.label || `Split ${idx + 1}`;
+        const color = item?.color || colorPalette[idx % colorPalette.length];
+        if (key) itemsMap.set(key, { key, name, value, color });
+      });
     } else if (typeof config === "object" && config !== null) {
-      arr = Object.entries(config).map(([key, value], idx) => ({
-        key,
-        name: keyToDisplay[key] || key,
-        value: Number(value) || 0,
-        color: colorPalette[idx % colorPalette.length],
-      }));
+      Object.entries(config).forEach(([k, v], idx) => {
+        const key = toKey(k);
+        if (!key) return;
+        const value = Number(v) || 0;
+        const name = keyToDisplay[key] || k;
+        const color = colorPalette[idx % colorPalette.length];
+        itemsMap.set(key, { key, name, value, color });
+      });
     }
 
-    return arr.length ? arr : defaultSplits;
+    // Ensure we always return the three allowed splits in the canonical order
+    return allowedKeys.map((k, idx) => {
+      if (itemsMap.has(k)) return itemsMap.get(k);
+      // fallback to default if not provided
+      const def = defaultSplits.find((d) => d.key === k) || {};
+      return { key: k, name: keyToDisplay[k] || def.name || k, value: def.value || 0, color: def.color || colorPalette[idx % colorPalette.length] };
+    });
   };
 
   const extractNetPaymentTotal = (paymentList = []) =>
@@ -256,28 +263,28 @@ export default function PaymentSplit() {
 
   const totalAllocation = splits.reduce((acc, curr) => acc + curr.value, 0);
 
-  const handleSave = async () => {
-    if (totalAllocation !== 100) {
-      setStatus({ type: "error", msg: "Total allocation must be 100%" });
-      return;
-    }
-    setSaving(true);
-    setStatus(null);
-    try {
-      const payloadConfig = (splits || []).reduce((acc, curr) => {
-        const key = curr.key || displayToKey[curr.name] || curr.name;
-        acc[key] = curr.value;
-        return acc;
-      }, {});
-      console.log("Saving config:", payloadConfig);
-      await update({ paymentConfig: payloadConfig }, uid ?? user?.uid ?? "");
-      setStatus({ type: "success", msg: "Payment configuration saved" });
-    } catch (e) {
-      setStatus({ type: "error", msg: e.message || "Failed to save config" });
-    } finally {
-      setSaving(false);
-    }
-  };
+  // const handleSave = async () => {
+  //   if (totalAllocation !== 100) {
+  //     setStatus({ type: "error", msg: "Total allocation must be 100%" });
+  //     return;
+  //   }
+  //   setSaving(true);
+  //   setStatus(null);
+  //   try {
+  //     const payloadConfig = (splits || []).reduce((acc, curr) => {
+  //       const key = curr.key || displayToKey[curr.name] || curr.name;
+  //       acc[key] = curr.value;
+  //       return acc;
+  //     }, {});
+  //     console.log("Saving config:", payloadConfig);
+  //     await update({ paymentConfig: payloadConfig }, uid ?? user?.uid ?? "");
+  //     setStatus({ type: "success", msg: "Payment configuration saved" });
+  //   } catch (e) {
+  //     setStatus({ type: "error", msg: e.message || "Failed to save config" });
+  //   } finally {
+  //     setSaving(false);
+  //   }
+  // };
 
   return (
     <div className="space-y-4 p-4 md:p-6">
@@ -316,7 +323,7 @@ export default function PaymentSplit() {
             >
               Reload
             </button>
-            <button
+            {/* <button
               onClick={handleSave}
               disabled={saving || totalAllocation !== 100}
               className={`inline-flex items-center gap-2 rounded-xl px-6 py-2.5 text-sm font-semibold transition-colors ${
@@ -329,7 +336,7 @@ export default function PaymentSplit() {
             >
               <Save size={17} />
               {saving ? "Saving..." : "Save Changes"}
-            </button>
+            </button> */}
           </div>
         </div>
       </div>
@@ -368,7 +375,7 @@ export default function PaymentSplit() {
             </p>
           </div>
           <div className="rounded-xl bg-rose-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-rose-500">
+            <p className="text-xs uppercase tracking-wide text-rose-600">
               Total debt
             </p>
             <p className="mt-1 text-lg font-semibold text-rose-700">
@@ -431,6 +438,7 @@ export default function PaymentSplit() {
                         value={split.value}
                         onChange={(e) => handleSplitChange(idx, e.target.value)}
                         className="w-16 text-right text-sm font-bold text-slate-800 outline-none bg-transparent"
+                        readOnly
                       />
                       <span className="text-sm font-medium text-slate-500">
                         %

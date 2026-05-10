@@ -20,43 +20,31 @@ export type Wallet = {
   verify?: boolean;
 };
 
+export enum TransactionStatus {
+  PENDING,
+  SUCCESS,
+  FAILED,
+  REFUNDED,
+  CANCELLED
+}
+
 export type Transaction = {
   id: string;
-  status: string;
-  amount: string;
-  fixedCharge: string;
-  source: string;
-  type: string;
-  customerBillerId: string;
-  timeCreated: string;
-  timeUpdated: string;
-  posTid: string;
-  posSerialNumber: string;
-  walletCurrency: string;
-  walletBalance: string;
-  billingVendorReference: string;
-  paymentVendorReference: string;
-  userId: string;
-  ktaSenderName: string;
-  ktaSenderAccountNumber: string;
-  ktaSenderBankCode: string;
-  recipientAccountNumber: string;
-  recipientAccountType: string;
-  senderName: string;
+  reference: string;
+  event: string;
+  status: TransactionStatus;
+  amount: number;
   currency: string;
-  bankCode: string;
-  productId: string;
-  isAgentTransaction: true;
-  isInternational: boolean;
-  customerCommission: string;
-  recipientAccountName: string;
-  sessionId: string;
-  accountNumber: string;
-  bankName: string;
-  entryType: string;
-  transactionCategory: string;
-  narration: string;
-  receiptTerminalId: string;
+  channel: string | null;
+  gatewayResponse: string | null;
+  customerEmail: string | null;
+  paymentReference: string | null;
+  userId: string | null;
+  metadata: object | null;
+  rawPayload: object | null;
+  createdAt: Date;
+  updatedAt: Date;
+  payment: string;
 };
 
 export async function createWallet(
@@ -153,15 +141,25 @@ export async function getBanks() {
   return data;
 }
 
-export async function getTransactions(
-  accountNumber: string,
-  fromDate: string,
-  toDate: string,
-): Promise<{ ok: boolean; transactions?: Wallet; message?: string }> {
-  const response = await fetch(`${API_URL}/wallet/transactions`, {
-    method: "POST",
+export async function getTransactions(id: string): Promise<{ ok: boolean; transactions?: Wallet; message?: string }> {
+  const response = await fetch(`${API_URL}/transaction/user/${id}`, {
+    method: "GET",
     headers: { ...buildHeaders(true) },
-    body: JSON.stringify({ accountNumber, fromDate, toDate }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+
+    throw new Error(errorData.message || "Failed to create admin");
+  }
+  const data = await response.json();
+  return data;
+}
+
+export async function getTransaction(id: string): Promise<{ ok: boolean; transaction?: Wallet; message?: string }> {
+  const response = await fetch(`${API_URL}/transaction/${id}`, {
+    method: "GET",
+    headers: { ...buildHeaders(true) },
   });
 
   if (!response.ok) {

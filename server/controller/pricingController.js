@@ -13,6 +13,8 @@ const createPricing = async (req, res) => {
       });
     }
 
+    console.log('Creating pricing with data:', value);
+
     const pricing = await prisma.pricing.create({
       data: {
         title: value.title,

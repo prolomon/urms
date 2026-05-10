@@ -332,3 +332,4 @@ function WalletPage() {
 }
 
 export default withAuth(WalletPage);
+  
