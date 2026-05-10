@@ -28,7 +28,7 @@ export type Agent = {
   role?: "AGENT";
   createdAt?: Date;
   updatedAt?: Date;
-}
+};
 
 export type User = {
   id?: string;
@@ -50,7 +50,7 @@ export type User = {
   role?: "AGENT";
   createdAt?: Date;
   updatedAt?: Date;
-}
+};
 
 export type Notification = {
   title: string;
@@ -76,8 +76,8 @@ export type Payment = {
   status: "PENDING" | "SUCCESS" | "FAILED" | "CANCELLED" | "REFUNDED";
   due: Date | null;
   isVerified: boolean;
-  sessions:     string[];
-  debt: number;      
+  sessions: string[];
+  debt: number;
   createdAt?: Date;
   updatedAt?: Date;
 };
@@ -117,7 +117,7 @@ export type AuthContextValue = {
   loading: boolean;
   login: (
     uid: string,
-    password: string,
+    password: string
   ) => Promise<{
     ok: boolean;
     message?: string;
@@ -129,7 +129,7 @@ export type AuthContextValue = {
     uid: string,
     password: string,
     confirm: string,
-    old: string,
+    old: string
   ) => Promise<{ ok: boolean; message?: string; error?: string }>;
   notifications: () => Promise<Notification[]>;
   receipt: (reference: string) => Promise<Payment | any>;
@@ -150,15 +150,15 @@ export type AuthContextValue = {
   token: string;
   createCode: (
     secureToken: string,
-    confirmSecureToken: string,
+    confirmSecureToken: string
   ) => Promise<{ ok: boolean; message?: string; error?: string }>;
   changeCode: (
     oldSecureToken: string,
     newSecureToken: string,
-    confirmSecureToken: string,
+    confirmSecureToken: string
   ) => Promise<{ ok: boolean; message?: string; error?: string }>;
   verifyCode: (
-    secureToken: string,
+    secureToken: string
   ) => Promise<{ ok: boolean; message?: string; error?: string }>;
   uid?: string;
 };
@@ -175,15 +175,6 @@ export type Pricing = {
   createdAt?: string;
   updatedAt?: string;
 };
-
-
-enum TransactionStatus {
-  PENDING,
-  SUCCESS,
-  FAILED,
-  REFUNDED,
-  CANCELLED,
-}
 
 export type Wallet = {
   id: string;
@@ -204,41 +195,29 @@ export type Wallet = {
   verify?: boolean;
 };
 
+export enum TransactionStatus {
+  PENDING,
+  SUCCESS,
+  FAILED,
+  REFUNDED,
+  CANCELLED,
+}
+
 export type Transaction = {
   id: string;
-  status: string;
-  amount: string;
-  fixedCharge: string;
-  source: string;
-  type: string;
-  customerBillerId: string;
-  timeCreated: string;
-  timeUpdated: string;
-  posTid: string;
-  posSerialNumber: string;
-  walletCurrency: string;
-  walletBalance: string;
-  billingVendorReference: string;
-  paymentVendorReference: string;
-  userId: string;
-  ktaSenderName: string;
-  ktaSenderAccountNumber: string;
-  ktaSenderBankCode: string;
-  recipientAccountNumber: string;
-  recipientAccountType: string;
-  senderName: string;
+  reference: string;
+  event: string;
+  status: TransactionStatus;
+  amount: number;
   currency: string;
-  bankCode: string;
-  productId: string;
-  isAgentTransaction: true;
-  isInternational: boolean;
-  customerCommission: string;
-  recipientAccountName: string;
-  sessionId: string;
-  accountNumber: string;
-  bankName: string;
-  entryType: string;
-  transactionCategory: string;
-  narration: string;
-  receiptTerminalId: string;
+  channel: string | null;
+  gatewayResponse: string | null;
+  customerEmail: string | null;
+  paymentReference: string | null;
+  userId: string | null;
+  metadata: object | null;
+  rawPayload: object | null;
+  createdAt: Date;
+  updatedAt: Date;
+  payment: string;
 };

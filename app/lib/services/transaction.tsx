@@ -1,26 +1,36 @@
 import { API_URL, buildHeaders } from "@/lib/api";
 import { Transaction } from "../types";
 
-export async function getTransactions(id: string): Promise<{ transactions: Transaction[];  ok: boolean; message?: string }> {
-  const response = await fetch(
-    `${API_URL}/transaction/user/${id}`,
-    { headers: buildHeaders() },
-  );
-  const data = await response.json();
+export async function getTransactions(
+  id: string
+): Promise<{ ok: boolean; transactions?: Transaction[]; message?: string }> {
+  const response = await fetch(`${API_URL}/transaction/user/${id}`, {
+    method: "GET",
+    headers: { ...buildHeaders() },
+  });
+
   if (!response.ok) {
-    throw new Error(data.message || "Failed to fetch members");
+    const errorData = await response.json();
+
+    throw new Error(errorData.message || "Failed to create admin");
   }
+  const data = await response.json();
   return data;
 }
 
-export async function getTransaction(id: string): Promise<{ transactions: Transaction;  ok: boolean; message?: string }> {
-  const response = await fetch(
-    `${API_URL}/transaction/${id}`,
-    { headers: buildHeaders() },
-  );
-  const data = await response.json();
+export async function getTransaction(
+  id: string
+): Promise<{ ok: boolean; transaction?: Transaction; message?: string }> {
+  const response = await fetch(`${API_URL}/transaction/${id}`, {
+    method: "GET",
+    headers: { ...buildHeaders() },
+  });
+
   if (!response.ok) {
-    throw new Error(data.message || "Failed to fetch members");
+    const errorData = await response.json();
+
+    throw new Error(errorData.message || "Failed to create admin");
   }
+  const data = await response.json();
   return data;
 }
