@@ -278,7 +278,7 @@ export default function AddEntityPage() {
     };
 
     const getFilteredPricing = () => {
-        const filteredPricing = pricingOptions.filter((p) => p.category === formData.category);
+        const filteredPricing = pricingOptions.filter((p) => p.category.toLowerCase() === formData.category.toLowerCase());
         const uniquePricing = new Map(
             filteredPricing
                 .filter((pricing) => pricing?.id)

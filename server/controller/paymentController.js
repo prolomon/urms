@@ -548,7 +548,7 @@ const makePayment = async (req, res) => {
         },
       }),
       prisma.wallet.findFirst({
-        where: { userId: company, role: "AGENT" },
+        where: { userId: company, role: "PARTNER" },
         select: {
           id: true,
           userId: true,
@@ -610,10 +610,11 @@ const makePayment = async (req, res) => {
 
     // Parse payment config for split percentages
     const paymentConfig = main.paymentConfig || {
-      main: 40,
-      agent: 20,
-      technology: 15,
+      main: 65,
+      agent: 25,
+      technology: 10,
     };
+
     const grossAmount = Number(amount);
     const feePercentage = 0.02; // 5% fee
     const fee = grossAmount * feePercentage;
@@ -687,7 +688,7 @@ const makePayment = async (req, res) => {
           where: { userId: "URMSAD-U4XJ4RKVMU" },
           data: {
             balance: {
-              increment: agentAmount,
+              increment: agentAmount + fee,
             },
           },
         });
@@ -795,20 +796,20 @@ const makePayment = async (req, res) => {
           data: {
             reference: `${receiptReference}-IT`,
             merchantTxRef: userId,
-            event: "payment.sender.debit",
+            event: "payment.it.debit",
             status: "SUCCESS",
-            amount: technologyAmount,
+            amount: technologyAmount + fee,
             currency: "NGN",
             channel: "wallet",
-            gatewayResponse: "Sender wallet debited",
+            gatewayResponse: "IT wallet credited",
             customerEmail: senderWallet?.accountName || null,
             paymentId: paymentRecord.id,
             userId: "URMSAD-U4XJ4RKVMU",
             metadata: {
               receipt,
               role: "IT",
-              transactionType: "DEBIT",
-              debitedAmount: grossAmount,
+              transactionType: "CREDIT",
+              creditedAmount: technologyAmount + fee,
               senderAccountNumber: senderDetails.accountNumber,
               senderBankName: senderDetails.bankName,
               senderBankCode: senderDetails.bankCode,
