@@ -30,6 +30,8 @@ export default function Pricing() {
     }));
   };
 
+  console.log(formData);
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     if (
       !formData.title ||
