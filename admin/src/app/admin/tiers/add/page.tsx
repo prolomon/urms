@@ -140,12 +140,7 @@ export default function Pricing() {
             <select
               name="category"
               value={formData.category}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  category: e.target.value,
-                }))
-              }
+              onChange={handleInputChange}
               required
               className="w-full appearance-none rounded-xl border border-slate-300 px-4 py-2.5 text-slate-700 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
             >
