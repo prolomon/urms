@@ -144,17 +144,20 @@ export default function MakePayment() {
                 return;
             }
             success("Payment successful");
-            // Clear secure token after successful verification
-            setSecureTokenInput("");
-            setPaymentAmount("");
-            setSelectedPayment(null);
-            fetchPayments();
+
+setSecureTokenInput("");
+setPaymentAmount("");
+setSelectedPayment(null);
+setShowPaymentModal(false);
+
+fetchPayments();
 
         } catch (error: any) {
             setError(error?.message || "An error occurred during verification");
             failed(error?.message || "An error occurred during verification");
         } finally {
             setShowPaymentModal(false)
+setError("")
         }
     };
 
