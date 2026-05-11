@@ -22,6 +22,9 @@ const nombaWebhook = async (req, res) => {
     const amount = Number(txn?.transactionAmount ?? 0);
     const merchantUserId = merchant?.userId || null;
     const walletId = merchant?.walletId || null;
+    const senderDetails = event.data?.customer || {};
+    const customerEmail = event.data?.customer?.email || null;
+    const transactionReference = txn?.transactionId || `nomba-${Date.now()}`;
 
     if (!aliasRef) {
       return res.status(400).json({ ok: false, message: 'Missing identifying information (aliasRef)' });
@@ -32,22 +35,9 @@ const nombaWebhook = async (req, res) => {
     }
 
     let wallet = null;
+    let user = null;
 
-    if (walletId) {
-      wallet = await prisma.wallet.findUnique({
-        where: { id: walletId },
-      });
-      console.log('Strategy 1 (merchant.walletId):', wallet ? 'Found' : 'Not found');
-    }
-
-    if (!wallet && merchantUserId) {
-      wallet = await prisma.wallet.findFirst({
-        where: { userId: txn?.aliasAccountReference },
-      });
-      console.log('Strategy 2 (merchant.userId):', wallet ? 'Found' : 'Not found');
-    }
-
-    if (!wallet && aliasRef) {
+    if (aliasRef) {
       wallet = await prisma.wallet.findFirst({
         where: {      
           OR: [
@@ -58,6 +48,7 @@ const nombaWebhook = async (req, res) => {
           ],
         },
       });
+
       console.log('Strategy 3 (alias/reference fallback):', wallet ? 'Found' : 'Not found');
     }
 
@@ -66,18 +57,40 @@ const nombaWebhook = async (req, res) => {
       // Could not find a wallet to credit; record transaction and return
       await prisma.transaction.create({
         data: {
-          reference: txn?.transactionId || 'nomba-' + Date.now(),
+          reference: transactionReference,
           merchantTxRef: merchantUserId,
           event: 'nomba.payment_success',
           status: 'PENDING',
           amount,
           currency: 'NGN',
-          channel: txn?.type || null,
-          gatewayResponse: JSON.stringify(txn || {}),
-          customerEmail: event.data?.customer?.accountNumber || null,
+          channel: 'wallet',
+          gatewayResponse: 'Wallet credit pending',
+          customerEmail,
           paymentId: null,
           userId: merchantUserId,
-          metadata: event,
+          metadata: {
+            requestId: event.requestId || null,
+            role: 'MERCHANT',
+            transactionType: 'CREDIT',
+            creditedAmount: amount,
+            senderAccountNumber: senderDetails.accountNumber || null,
+            senderBankName: senderDetails.bankName || null,
+            senderBankCode: senderDetails.bankCode || null,
+            senderName: senderDetails.senderName || null,
+            aliasAccountNumber: txn?.aliasAccountNumber || null,
+            aliasAccountName: txn?.aliasAccountName || null,
+            aliasAccountReference: aliasRef,
+            aliasAccountType: txn?.aliasAccountType || null,
+            sessionId: txn?.sessionId || null,
+            transactionId: txn?.transactionId || null,
+            transactionTypeName: txn?.type || null,
+            narration: txn?.narration || null,
+            time: txn?.time || null,
+            originatingFrom: txn?.originatingFrom || null,
+            merchant,
+            transaction: txn,
+            status: 'PENDING',
+          },
           rawPayload: event,
         },
       }).catch(() => null);
@@ -92,29 +105,53 @@ const nombaWebhook = async (req, res) => {
 
     const updatedWallet = await prisma.wallet.update({
       where: { id: wallet.id },
-      data: { balance: newBalance },
+      data: { balance: merchant.walletBalance || newBalance },
     });
 
     console.log('Wallet updated. New balance:', newBalance);
 
     // Record transaction
-    await prisma.transaction.create({
+    const transact = await prisma.transaction.create({
       data: {
-        reference: txn?.transactionId || `nomba-${Date.now()}`,
+        reference: transactionReference,
         merchantTxRef: wallet.userId,
-        event: 'nomba.payment_success',
+        event: 'nomba.payment.credit',
         status: 'SUCCESS',
         amount,
         currency: 'NGN',
-        channel: txn?.type || null,
-        gatewayResponse: JSON.stringify(txn || {}),
-        customerEmail: event.data?.customer?.accountNumber || null,
+        channel: 'wallet',
+        gatewayResponse: 'Wallet credited',
+        customerEmail,
         paymentId: null,
         userId: wallet.userId,
-        metadata: event,
+        metadata: {
+          requestId: event.requestId || null,
+          role: 'MERCHANT',
+          transactionType: 'CREDIT',
+          creditedAmount: amount,
+          senderAccountNumber: senderDetails.accountNumber || null,
+          senderBankName: senderDetails.bankName || null,
+          senderBankCode: senderDetails.bankCode || null,
+          senderName: senderDetails.senderName || null,
+          aliasAccountNumber: txn?.aliasAccountNumber || null,
+          aliasAccountName: txn?.aliasAccountName || null,
+          aliasAccountReference: aliasRef,
+          aliasAccountType: txn?.aliasAccountType || null,
+          sessionId: txn?.sessionId || null,
+          transactionId: txn?.transactionId || null,
+          transactionTypeName: txn?.type || null,
+          narration: txn?.narration || null,
+          time: txn?.time || null,
+          originatingFrom: txn?.originatingFrom || null,
+          merchant,
+          transaction: txn,
+          status: 'SUCCESS',
+        },
         rawPayload: event,
       },
-    }).catch(() => null);
+    })
+
+    console.log('Transaction recorded with ID:', transact);
 
     return res.status(200).json({ ok: true, message: 'Wallet credited', wallet: { id: updatedWallet.id, balance: updatedWallet.balance } });
   } catch (err) {
@@ -124,55 +161,6 @@ const nombaWebhook = async (req, res) => {
 };
 
 const paystackWebhook = async (req, res) => {
-  // try {
-  //   if (!process.env.PAYSTACK_SECRET_KEY) {
-  //     return res.status(500).json({
-  //       ok: false,
-  //       message: "PAYSTACK_SECRET_KEY is not configured",
-  //     });
-  //   }
-
-  //   const signature = req.headers["x-paystack-signature"];
-  //   if (!signature) {
-  //     return res.status(401).json({ ok: false, message: "Missing Paystack signature" });
-  //   }
-
-  //   if (!Buffer.isBuffer(req.body)) {
-  //     return res.status(400).json({ ok: false, message: "Invalid webhook payload" });
-  //   }
-
-  //   const expectedSignature = crypto
-  //     .createHmac("sha512", process.env.PAYSTACK_SECRET_KEY)
-  //     .update(req.body)
-  //     .digest("hex");
-
-  //   if (signature !== expectedSignature) {
-  //     return res.status(401).json({ ok: false, message: "Invalid Paystack signature" });
-  //   }
-
-  //   const event = JSON.parse(req.body.toString("utf8"));
-
-  //   const supportedEvents = new Set([
-  //     "transfer.success",
-  //     "transfer.failed",
-  //     "charge.success",
-  //     "charge.failed",
-  //     "refund.processed",
-  //   ]);
-
-  //   if (!supportedEvents.has(event?.event)) {
-  //     return res.status(200).json({ ok: true, message: "Webhook ignored" });
-  //   }
-
-  //   const result = await recordWebhookTransaction(event);
-  //   if (!result?.ok) {
-  //     return res.status(400).json({ ok: false, message: result?.message || "Unable to process webhook" });
-  //   }
-
-  //   return res.status(200).json({ ok: true, message: "Webhook processed" });
-  // } catch (err) {
-  //   return res.status(500).json({ ok: false, message: err?.message || "Server error" });
-  // }
 };
 
 export { paystackWebhook, nombaWebhook };

@@ -149,7 +149,7 @@ export async function verifySecurityCode(id: string, secureToken: string, ) {
     throw new Error("No authentication token found");
   }
 
-  const response = await fetch(`${API_URL}/agent/${id}/verify-security-token`, {
+  const response = await fetch(`${API_URL}/admin/${id}/verify-security-token`, {
     method: "POST",
     headers: {...buildHeaders(true)},
     body: JSON.stringify({ secureCode: secureToken }),

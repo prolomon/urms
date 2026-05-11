@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { ArrowLeft, Loader2, Wallet } from "lucide-react";
 import withAuth from "@/components/withAuth";
-import { verifySecurityCode } from "@/lib/services/admin";
 import { useAuth } from "@/context/AuthContext";
 import { useWallet } from "@/context/WalletContext";
 import { useRouter } from "next/navigation";
@@ -13,10 +12,10 @@ function WalletPage() {
   const router = useRouter();
   const [transferLoading, setTransferLoading] = useState(false);
   const [transferError, setTransferError] = useState<string | null>(null);
-  const { user } = useAuth();
-  const { wallet, loading, error, resolveBankAccount, initiateTransfer } =
+  const { loading, error, resolveBankAccount, initiateTransfer } =
     useWallet();
   const [success, setSuccess] = useState(false);
+  const { user } = useAuth();
 
   const [bankList, setBankList] = useState<
     { code: string; logo: string; name: string; nipCode: null }[]
@@ -114,13 +113,6 @@ function WalletPage() {
 
   //Automatically get account name
   useEffect(() => {
-    if (
-      formData.accountNumber.length > 10 ||
-      formData.accountNumber.length < 10
-    ) {
-      return;
-    }
-
     if (!formData.bankCode) {
       setTransferError("Select the bank to resolve account name");
       return;
@@ -148,14 +140,14 @@ function WalletPage() {
         return;
       }
 
-      if (formData.pin) {
-        const res = await verifySecurityCode(user?.uid || "", formData.pin);
+      console.log("Initiating transfer with data:", formData);
 
-        if (!res.ok) {
-          setTransferError(res.message || "Invalid security code");
+      if (!formData.pin) {
+          setTransferError("Enter a valid security code");
           return;
-        }
       }
+
+      console.log("Initiating transfer with data:", formData);
 
       // Here you would call the initiateTransfer function from your wallet service, passing the amount, recipientCode, and reason from the formData
       const init = await initiateTransfer(
@@ -163,9 +155,10 @@ function WalletPage() {
         formData.accountNumber,
         formData.name,
         formData.bankCode,
-        new Date().toISOString(),
-        user?.name || "",
-        formData.reason
+        user.uid,
+        formData.reason,
+        formData.pin,
+        "ADMIN"
       );
 
       if (!init.ok) {

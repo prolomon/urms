@@ -716,7 +716,7 @@ const makePayment = async (req, res) => {
         });
       }
 
-      await Promise.all([
+      await Promise.all([ 
         tx.transaction.create({
           data: {
             reference: `${receiptReference}-ADMIN`,

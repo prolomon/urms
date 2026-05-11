@@ -89,9 +89,10 @@ export async function initiateTransfer(
   accountNumber: string,
   accountName: string,
   bankCode: string,
-  merchantTxRef: string,
-  senderName: string,
+  id: string,
   narration: string,
+  pin: string,
+  type: "ADMIN" | "AGENT" | "COMPANY" | "STAFF"
 ) {
   const response = await fetch(`${API_URL}/wallet/transfer/initiate`, {
     method: "POST",
@@ -101,9 +102,10 @@ export async function initiateTransfer(
       accountNumber,
       accountName,
       bankCode,
-      merchantTxRef,
-      senderName,
+      id,
       narration,
+      pin,
+      type
     }),
   });
 

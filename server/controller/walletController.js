@@ -13,6 +13,7 @@ import {
   getBanks,
   getTransactions
 } from "../service/wallet.js";
+import argon2 from "argon2";
 
 const validationErrorResponse = (res, error) => {
   const errors = error.details.map((detail) => detail.message);
@@ -167,12 +168,95 @@ const initiateTransferController = async (req, res) => {
       return validationErrorResponse(res, error);
     }
 
-    const { amount, accountNumber, accountName, bankCode, senderName, narration } = value;
+    const { amount, accountNumber, accountName, bankCode, narration, pin, type, id } = value;
+
+    if (type === "ADMIN") {
+
+      const admin = await prisma.admin.findUnique({
+        where: { uid: req.userId },
+        select: { uid: true, secureToken: true },
+      });
+
+      if (!admin) {
+        return res.status(404).json({ ok: false, message: "Admin not found" });
+      }
+
+      if (!admin.secureToken) {
+        return res
+          .status(400)
+          .json({ ok: false, message: "Security token is not set" });
+      }
+
+      if (!pin) {
+        return res.status(400).json({ ok: false, message: "pin is required" });
+      }
+
+      const isValid = await argon2.verify(admin.secureToken, pin);
+
+      if (!isValid) {
+        return res.status(401).json({ ok: false, message: "Invalid security code" });
+      }
+    } else if (type === "AGENT") {
+
+      const agent = await prisma.agent.findUnique({
+        where: { uid: req.userId },
+        select: { uid: true, secureToken: true },
+      });
+
+      if (!agent) {
+        return res.status(404).json({ ok: false, message: "Agent not found" });
+      }
+
+      if (!agent.secureToken) {
+        return res
+          .status(400)
+          .json({ ok: false, message: "Security token is not set" });
+      }
+
+      if (!pin) {
+        return res.status(400).json({ ok: false, message: "pin is required" });
+      }
+
+      const isValid = await argon2.verify(agent.secureToken, pin);
+
+      if (!isValid) {
+        return res.status(401).json({ ok: false, message: "Invalid security code" });
+      }
+
+    } else if (type === "MEMBER") {
+
+      const member = await prisma.user.findUnique({
+        where: { uid: req.userId },
+        select: { uid: true, secureToken: true },
+      });
+
+      if (!member) {
+        return res.status(404).json({ ok: false, message: "Member not found" });
+      }
+
+      if (!member.secureToken) {
+        return res
+          .status(400)
+          .json({ ok: false, message: "Security token is not set" });
+      }
+
+      if (!pin) {
+        return res.status(400).json({ ok: false, message: "pin is required" });
+      }
+
+      const isValid = await argon2.verify(member.secureToken, pin);
+
+      if (!isValid) {
+        return res.status(401).json({ ok: false, message: "Invalid security code" });
+      }
+    }
+
+    const wallet = await prisma.wallet.findFirst({
+      where: { userId: id, role: type },
+    });
 
     // Use authenticated user's UID as merchant transaction reference
-    const merchantTxRef = req.userId;
-
-    const result = await initiateTransfer(amount, accountNumber, accountName, bankCode, merchantTxRef, senderName, narration);
+    const result = await initiateTransfer(amount, accountNumber, accountName, bankCode, id, wallet.accountName, narration)
 
     if (!result?.status) {
       return res.status(502).json({
@@ -180,42 +264,6 @@ const initiateTransferController = async (req, res) => {
         message: result?.message || "Failed to initiate transfer",
         data: result?.data || null,
       });
-    }
-
-    try {
-      const txnRef = (result?.data && (result.data.reference || result.data.transferCode || result.data.id)) || `${merchantTxRef}-${Date.now()}`;
-      const txnStatus = (result?.data && (String(result.data.status || '').toUpperCase() === 'SUCCESS' || result?.status)) ? 'SUCCESS' : 'PENDING';
-      const senderBank = req.user?.wallet?.bank || req.user?.bank || null;
-
-      await prisma.transaction.create({
-        data: {
-          reference: String(txnRef),
-          merchantTxRef,
-          event: 'transfer.initiated',
-          status: txnStatus,
-          amount: Number(amount),
-          currency: result?.data?.currency || 'NGN',
-          channel: 'bank',
-          gatewayResponse: result?.message || null,
-          customerEmail: req.user?.email || null,
-          paymentId: null,
-          userId: merchantTxRef,
-          metadata: {
-            accountNumber,
-            accountName,
-            bankCode,
-            senderAccountNumber: senderBank?.accountNo || null,
-            senderBankName: senderBank?.name || null,
-            senderBankCode: senderBank?.code || null,
-            senderName: req.user?.fullname || req.user?.name || senderName || null,
-            bankName: result?.data?.bankName || null,
-            merchantTxRef,
-            raw: result?.data || null,
-          },
-        },
-      });
-    } catch (txErr) {
-      console.error('Failed to record transfer transaction:', txErr?.message || txErr);
     }
 
     return res.status(200).json({
