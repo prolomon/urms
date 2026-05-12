@@ -15,8 +15,9 @@ const createCompanySchema = Joi.object({
     "string.max": "Phone must be at most 20 characters long",
     "any.required": "Phone is required",
   }),
-  category: Joi.string().trim().optional().allow(null).messages({
+  category: Joi.string().trim().required().messages({
     "string.base": "Category must be a string",
+    "any.required": "Category is required",
   }),
   email: Joi.string().email().required().messages({
     "string.email": "Email must be a valid email address",

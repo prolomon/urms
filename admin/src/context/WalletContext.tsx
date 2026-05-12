@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { Wallet, getWallet, createWallet, initiateTransfer, resolveBankAccount, getBanks, getTransactions } from "@/lib/services/wallet";
+import { Wallet, getWallet, createWallet, initiateTransfer, resolveBankAccount, getBanks, getTransactions, getTransaction } from "@/lib/services/wallet";
 
 const walletContext = createContext<any>(null);
 
@@ -81,6 +81,7 @@ export const WalletProvider = ({ children }) => {
         initiateTransfer, 
         resolveBankAccount,
         getTransactions,
+        getTransaction,
         getBanks
     };
 

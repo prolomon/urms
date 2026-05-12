@@ -14,7 +14,7 @@ const router = express.Router();
 router.post('/', authMiddleware, roleMiddleware(['admin']), createTransaction);
 router.get('/', authMiddleware, roleMiddleware(['admin']), getAllTransactions);
 router.get('/user/:userId', authMiddleware, roleMiddleware(['user', 'admin']), getTransactionsByUserId);
-router.get('/reference/:reference', authMiddleware, roleMiddleware(['user', 'admin']), getTransactionsByReference);
+router.get('/reference', authMiddleware, roleMiddleware(['user', 'admin']), getTransactionsByReference);
 router.get('/:id', authMiddleware, roleMiddleware(['user', 'admin']), getTransactionById);
 
 export { router as transactionRouter };

@@ -116,7 +116,7 @@ export default function AddPartnerPage() {
     setLoading(true);
 
     try {
-      if (!formData.name || !formData.email || !formData.phone) {
+      if (!formData.name || !formData.email || !formData.phone || !formData.category || !bank.accountNumber || !bank.bankCode) {
         addToast("error", "Please fill in all required fields");
         setLoading(false);
         return;
@@ -138,6 +138,8 @@ export default function AddPartnerPage() {
       setLoading(false);
     }
   };
+
+  console.log(formData)
 
   return (
     <div className="mx-auto space-y-4 p-4 md:space-y-5 md:p-6">
@@ -249,6 +251,7 @@ export default function AddPartnerPage() {
                 required
                 className="w-full appearance-none rounded-xl border border-slate-300 px-4 py-2.5 text-slate-700 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
               >
+                <option value="" hidden>Select category</option>
                 <option value="HOSPITALITY & ACCOMMODATION">Hospitality & Accommodation</option>
                 <option value="FOOD & BEVERAGE">Food & Beverage</option>
                 <option value="CORPORATE & OFFICE PREMISES">Corporate & Office Premises</option>

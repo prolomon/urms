@@ -1,372 +1,397 @@
-import { BusinessType, useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { verifySecurityCode } from "@/lib/services/member";
+import { getPayments, makePayment } from "@/lib/services/payment";
+import { getPricingByCenter } from "@/lib/services/pricing";
+import { Payment, Pricing } from "@/lib/types";
 import { useRouter } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 
-export default function BillingSettings() {
+export default function MakePayment() {
   const router = useRouter();
-  const { currentUser, billing, getBusiness, payments } = useAuth();
-  const { success, failed } = useToast();
-  const [frequency, setFrequency] = useState<
-    "MONTHLY" | "QUARTERLY" | "YEARLY"
-  >(
-    currentUser?.billingFrequency?.toUpperCase() as
-      | "MONTHLY"
-      | "QUARTERLY"
-      | "YEARLY",
-  );
-  const [autoDebit, setAutoDebit] = useState(false);
+  const { currentUser, token } = useAuth();
+  const { failed, success } = useToast();
+
+  const [allPayments, setAllPayments] = useState<Payment[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [pricing, setPricing] = useState<BusinessType[]>([]);
-  const [loadingPricing, setLoadingPricing] = useState(true);
-  const [loadingPayments, setLoadingPayments] = useState(true);
-  const [lastPaymentDue, setLastPaymentDue] = useState<Date | null>(null);
-  const [paymentsList, setPaymentsList] = useState<any[]>([]);
+  const [loadingPayments, setLoadingPayments] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState<string>("");
+  const [secureTokenInput, setSecureTokenInput] = useState<string>("");
+  const [pricing, setPricing] = useState<Pricing[]>([]);
+  const [error, setError] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+
+  const fetchPricing = useCallback(async () => {
+    try {
+      const data = await getPricingByCenter(currentUser?.center || "", token as string);
+      if (data.ok && data.data) {
+        setPricing(data.data);
+      } else {
+        setPricing([]);
+        failed(data.message || "Failed to fetch pricing");
+      }
+    } catch (error: any) {
+      setPricing([]);
+      failed(error.message || "An error occurred while fetching pricing");
+    }
+  }, [token, failed]);
 
   useEffect(() => {
-    const run = async () => {
-      await Promise.all([fetchPricing(), fetchPaymentHistory()]);
-    };
-    run();
-  }, []);
+    fetchPricing();
+  }, [fetchPricing]);
 
-  const fetchPricing = async () => {
-    try {
-      setLoadingPricing(true);
-      const response = await getBusiness();
-      if (response && Array.isArray(response)) {
-        setPricing(response);
-      }
-    } catch (error) {
-      failed("Failed to load pricing");
-    } finally {
-      setLoadingPricing(false);
-    }
+  const formatAmount = (value: number) =>
+    value.toLocaleString("en-NG", {
+      style: "currency",
+      currency: "NGN",
+    });
+
+  const formatDate = (value?: string | Date | null) => {
+    if (!value) return "N/A";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? "N/A"
+      : date.toLocaleDateString("en-NG", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
   };
 
-  const fetchPaymentHistory = async () => {
+  const fetchPayments = useCallback(async () => {
     try {
-      setLoadingPayments(true);
-      const list = (await payments?.()) || [];
-      setPaymentsList(Array.isArray(list) ? list : []);
-      if (Array.isArray(list) && list.length > 0) {
-        const latest = list.reduce((latest, payment) => {
-          const dueDate = new Date(payment.due || payment.date);
-          return dueDate > new Date(latest.due || latest.date)
-            ? payment
-            : latest;
-        }, list[0]);
-        setLastPaymentDue(new Date(latest.due || latest.date));
-      } else {
-        setLastPaymentDue(null);
+      if (!currentUser?.uid) {
+        setAllPayments([]);
+        return;
       }
-    } catch (error) {
-      setLastPaymentDue(null);
+
+      setLoadingPayments(true);
+      const data = await getPayments(currentUser.uid, token as string);
+
+      if (data.ok && data.payments) {
+        setAllPayments(data.payments);
+      } else {
+        setAllPayments([]);
+        failed(data.message || "Failed to fetch payments");
+      }
+    } catch (error: any) {
+      setAllPayments([]);
+      failed(error.message || "An error occurred while fetching payments");
     } finally {
       setLoadingPayments(false);
     }
-  };
+  }, [currentUser?.uid, token, failed]);
 
-  const currentPlanPrice =
-    pricing.find((t) => t.id === currentUser?.type)?.price || "15000";
-
-  const frequencyList = [
-    {
-      key: "monthly" as const,
-      label: "Monthly",
-      multiplier: 1,
-    },
-    {
-      key: "quarterly" as const,
-      label: "Quarterly",
-      multiplier: 3,
-    },
-    {
-      key: "yearly" as const,
-      label: "Yearly",
-      multiplier: 12,
-    },
-  ];
-
-  const calculatePrice = (multiplier: number) => {
-    const price = Number(currentPlanPrice) || 15000;
-    return (price * multiplier).toLocaleString("en-NG", {
-      style: "currency",
-      currency: "NGN",
-      minimumFractionDigits: 0,
-    });
-  };
-
-  const today = (() => {
-    const t = new Date();
-    t.setHours(0, 0, 0, 0);
-    return t;
-  })();
-
-  const frequencyDays: Record<string, number> = {
-    MONTHLY: 30,
-    QUARTERLY: 90,
-    YEARLY: 365,
-  };
-
-  const computedDueDate = (() => {
-    const days = frequencyDays[frequency ?? "MONTHLY"] ?? 30;
-    const d = new Date(today);
-    d.setDate(d.getDate() + days);
-    return d;
-  })();
-
-  const formattedDueDate = computedDueDate.toLocaleDateString("en-NG", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-
-  const isSaveDisabled = today < computedDueDate;
-
-  const handleBilling = () => {
-    if (frequency) {
-      billing(
-        frequency.toUpperCase() as "MONTHLY" | "QUARTERLY" | "YEARLY",
-        new Date(computedDueDate),
-      );
-      success("Billing settings updated successfully!");
-    }
-  };
+  useEffect(() => {
+    fetchPayments();
+  }, [fetchPayments]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchPricing();
-    await fetchPaymentHistory();
+    await fetchPayments();
     setRefreshing(false);
   };
 
-  const handlePaymentFrequencyChange = (ref: string | undefined, newFreq: "MONTHLY" | "QUARTERLY" | "YEARLY") => {
-    setPaymentsList((prev) =>
-      prev.map((p) => (p.reference === ref ? { ...p, selectedFrequency: newFreq } : p)),
-    );
+  const handlePayNow = async () => {
+    setLoading(true);
+    if (!currentUser?.uid) {
+      setError("No user available");
+      failed("No user available");
+      return;
+    }
+
+    if (!secureTokenInput || secureTokenInput.trim().length === 0) {
+      setError("Please enter your secure token");
+      failed("Please enter your secure token");
+      return;
+    }
+
+    try {
+
+      const paymentRes = await makePayment(
+        currentUser.uid,
+        Number(paymentAmount),
+        selectedPayment?.payment as string,
+        currentUser.center as string,
+        currentUser.company as string,
+        secureTokenInput.trim(),
+        token as string
+      );
+
+      if (!paymentRes || !paymentRes.ok) {
+        setError(paymentRes?.message || "Payment failed");
+        failed(paymentRes?.message || "Payment failed");
+        return;
+      }
+      success("Payment successful");
+
+      fetchPayments();
+
+    } catch (error: any) {
+      setError(error?.message || "An error occurred during verification");
+      failed(error?.message || "An error occurred during verification");
+    } finally {
+      setSecureTokenInput("");
+      setPaymentAmount("");
+      setSelectedPayment(null);
+      setShowPaymentModal(false);
+
+      setError("")
+      setLoading(false);
+    }
   };
 
-  const computePaymentAmount = (baseAmount: number | string | undefined, freqKey: string) => {
-    const multiplier = frequencyList.find((f) => f.key.toUpperCase() === freqKey.toUpperCase())?.multiplier || 1;
-    const amt = Number(baseAmount) || Number(currentPlanPrice) || 15000;
-    return (amt * multiplier).toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 });
-  };
-
-  const computePaymentDue = (baseDate: string | Date | undefined, freqKey: string) => {
-    const base = baseDate ? new Date(baseDate) : new Date();
-    const days = frequencyDays[freqKey?.toUpperCase() ?? "MONTHLY"] || 30;
-    const d = new Date(base);
-    d.setDate(d.getDate() + days);
-    return d.toLocaleDateString("en-NG", { year: "numeric", month: "long", day: "numeric" });
-  };
-
-  const handleApplyFrequency = async (payment: any) => {
-    // placeholder: implement API call to update payment frequency if needed
-    success("Frequency applied (local preview only)");
-  };
+  const sortedPayments = [...allPayments].sort((left, right) => {
+    const leftDate = new Date(left.due || left.date).getTime();
+    const rightDate = new Date(right.due || right.date).getTime();
+    return rightDate - leftDate;
+  });
 
   return (
-    <ScrollView
-      style={styles.safe}
-      contentContainerStyle={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
-      <View style={styles.header}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.back}
-            activeOpacity={0.7}
-            onPress={() => router.back()}
-          >
-            <ArrowLeft color="#000" />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: "#000" }]}>
-            Billing Settings
-          </Text>
-          <View style={{ width: 32 }} />
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Current Plan</Text>
-
-        <View style={styles.currentPlan}>
-          {loadingPricing ? (
-            <ActivityIndicator size="small" color="#0ea360" />
-          ) : pricing.find((t) => t.id === currentUser?.type) ? (
-            <>
-              <Text style={styles.planName}>
-                {pricing.find((t) => t.id === currentUser?.type)?.title}
-              </Text>
-              <Text style={styles.planPrice}>
-                ₦
-                {Number(
-                  pricing.find((t) => t.id === currentUser?.type)
-                    ?.price,
-                ).toLocaleString("en-NG")}
-                /month
-              </Text>
-            </>
-          ) : (
-            <>
-              <Text style={styles.planName}>No Plan Selected</Text>
-              <Text style={styles.planPrice}>₦0/month</Text>
-            </>
-          )}
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Billing Frequency</Text>
-
-        {frequencyList.map((freq) => (
-          <TouchableOpacity
-            key={freq.key}
-            style={styles.option}
-            activeOpacity={0.8}
-            onPress={() =>
-              setFrequency(
-                freq.key.toUpperCase() as "MONTHLY" | "QUARTERLY" | "YEARLY",
-              )
-            }
-          >
-            <View style={styles.optionLeft}>
-              <View
-                style={[
-                  styles.radioOuter,
-                  frequency?.toUpperCase() === freq.key?.toUpperCase()
-                    ? styles.radioSelected
-                    : undefined,
-                ]}
-              >
-                {frequency?.toUpperCase() === freq.key?.toUpperCase() ? (
-                  <View style={styles.radioInner} />
-                ) : null}
-              </View>
-              <Text>{freq.label}</Text>
-            </View>
-            <Text style={styles.optionPrice}>
-              {calculatePrice(freq.multiplier)}
-            </Text>
-          </TouchableOpacity>
-        ))}
-
-        <View style={styles.dueDateRow}>
-          <Text style={styles.dueDateLabel}>Next due date</Text>
-          <Text style={styles.dueDateValue}>{formattedDueDate}</Text>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Auto-Payment</Text>
-        <View style={styles.autoRow}>
-          <View style={styles.autoLeft}>
-            <Text>Enable Auto-Debit</Text>
+      <ScrollView
+        style={styles.safe}
+        contentContainerStyle={styles.container}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        <View style={styles.header}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              style={styles.back}
+              activeOpacity={0.7}
+              onPress={() => router.back()}
+            >
+              <ArrowLeft color="#000" />
+            </TouchableOpacity>
+            <Text style={[styles.headerTitle, { color: "#000" }]}>Make Payment</Text>
+            <View style={{ width: 32 }} />
           </View>
-          <TouchableOpacity
-            style={[
-              styles.toggle,
-              autoDebit ? styles.toggleOn : styles.toggleOff,
-            ]}
-            onPress={() => setAutoDebit((s) => !s)}
-            activeOpacity={0.8}
-          >
-            <View
-              style={[
-                styles.toggleCircle,
-                autoDebit ? styles.toggleCircleOn : styles.toggleCircleOff,
-              ]}
-            />
-          </TouchableOpacity>
         </View>
-      </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Your Payments</Text>
         {loadingPayments ? (
-          <ActivityIndicator size="small" color="#0ea360" />
-        ) : paymentsList.length === 0 ? (
-          <Text style={styles.emptyText}>No payments available</Text>
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="small" color="#0ea360" />
+          </View>
+        ) : sortedPayments.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>No payments found</Text>
+            <Text style={styles.emptyText}>
+              Your payment history will appear here.
+            </Text>
+          </View>
         ) : (
-          paymentsList.map((p) => {
-            const selFreq = (p.selectedFrequency || p.frequency || frequency || "MONTHLY").toUpperCase();
-            const computedAmount = computePaymentAmount(p.amount, selFreq);
-            const computedDue = computePaymentDue(p.due || p.date, selFreq);
-            return (
-              <View key={p.reference || p.id} style={styles.payCard}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.payTitle}>{p.businessName || p.reference}</Text>
-                  <Text style={styles.paySub}>{p.payment || p.frequency}</Text>
-                  <Text style={styles.payDate}>{computedDue}</Text>
+          <View style={{ marginHorizontal: 14, marginTop: 12 }}>
+            {sortedPayments.map((payment, index) => {
+
+              const pricingInfo = pricing.find((item) => item.id === payment.payment)
+              const isPayable = payment.status.toLowerCase() !== "success" && Number(payment.debt) <= payment.amount;
+              const statusLabel = payment.status.charAt(0).toUpperCase() + payment.status.slice(1).toLowerCase();
+
+              return (
+                <View
+                  key={payment.reference || `${payment.userId}-${index}`}
+                  style={styles.paymentCard}
+                >
+                  <View style={styles.cardTopRow}>
+                    <View style={{ flex: 1, paddingRight: 12 }}>
+                      <Text style={styles.planLabel} numberOfLines={1}>
+                        {pricingInfo?.title || "Payment"}
+                      </Text>
+                      {pricingInfo?.category ? (
+                        <Text style={styles.paymentMeta} numberOfLines={1}>
+                          {pricingInfo.category}
+                        </Text>
+                      ) : null}
+                      <Text style={styles.paymentMeta}>
+                        Due {formatDate(payment.due)}
+                      </Text>
+                    </View>
+
+                    <View style={[styles.statusBadge, payment.status.toLowerCase() === "success" ? styles.statusSuccess : styles.statusPending]}>
+                      <Text style={[styles.statusText, payment.status.toLowerCase() === "success" ? styles.statusTextSuccess : styles.statusTextPending]}>
+                        {statusLabel}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.amountGrid}>
+                    <View style={styles.amountBadge}>
+                      <Text style={styles.amountLabel}>Amount</Text>
+                      <Text style={styles.amountValue}>
+                        {formatAmount(Number(payment.amount) || 0).replace("₦", "")}
+                      </Text>
+                    </View>
+                    <View style={styles.debtBadge}>
+                      <Text style={styles.debtLabel}>Outstanding</Text>
+                      <Text style={styles.debtValue}>
+                        {formatAmount(Number(payment.debt) || 0).replace("₦", "")}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {isPayable ? (
+                    <TouchableOpacity
+                      style={styles.payNowButton}
+                      activeOpacity={0.85}
+                      onPress={() => {
+                        setSelectedPayment(payment);
+                        setPaymentAmount(String(payment.amount || ""));
+                        setShowPaymentModal(true);
+                      }}
+                    >
+                      <Text style={styles.payNowText}>{loading ? "Processing..." : "Pay now"}</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        <Modal visible={showPaymentModal} animationType="slide">
+          <View style={styles.modalShell}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalEyebrow}>Payment checkout</Text>
+                <Text style={styles.modalHeaderTitle}>Review and pay securely</Text>
+              </View>
+              <TouchableOpacity style={styles.closeButtonWrap} onPress={() => setShowPaymentModal(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {error ? (
+              <View style={styles.errorBanner}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
+
+            <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
+              <View style={styles.modalHeroCard}>
+                <Text style={styles.modalTitleLarge} numberOfLines={1}>
+                  {pricing.find((item) => item.id === selectedPayment?.payment)?.title || selectedPayment?.payment || "Payment Details"}
+                </Text>
+
+                <View style={styles.badgeRow}>
+                  {pricing.find((item) => item.id === selectedPayment?.payment)?.category ? (
+                    <View style={styles.categoryBadge}>
+                      <Text style={styles.categoryText}>
+                        {pricing.find((item) => item.id === selectedPayment?.payment)?.category}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  <View style={[styles.statusBadge, selectedPayment?.status?.toLowerCase() === "success" ? styles.statusSuccess : styles.statusPending]}>
+                    <Text style={[styles.statusText, selectedPayment?.status?.toLowerCase() === "success" ? styles.statusTextSuccess : styles.statusTextPending]}>
+                      {selectedPayment?.status || "Pending"}
+                    </Text>
+                  </View>
                 </View>
 
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.payAmount}>{computedAmount}</Text>
-                  <View style={{ flexDirection: 'row', marginTop: 8 }}>
-                    {frequencyList.map((f) => (
-                      <TouchableOpacity
-                        key={f.key}
-                        style={[styles.freqBtn, selFreq === f.key.toUpperCase() ? styles.freqBtnActive : undefined]}
-                        onPress={() => handlePaymentFrequencyChange(p.reference, f.key.toUpperCase() as any)}
-                      >
-                        <Text style={[styles.freqText, selFreq === f.key.toUpperCase() ? styles.freqTextActive : undefined]}>{f.label}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  <TouchableOpacity style={[styles.primaryBtn, { marginTop: 8 }]} onPress={() => handleApplyFrequency(p)}>
-                    <Text style={styles.primaryText}>Apply</Text>
-                  </TouchableOpacity>
+                <Text style={styles.modalSubtitle}>
+                  Confirm the details below, enter the amount, and complete the payment in one step.
+                </Text>
+              </View>
+
+              <View style={styles.summaryGrid}>
+                <View style={styles.summaryCard}>
+                  <Text style={styles.summaryLabel}>Reference</Text>
+                  <Text style={styles.summaryValue} numberOfLines={1}>
+                    {selectedPayment?.reference || "N/A"}
+                  </Text>
+                </View>
+                <View style={styles.summaryCard}>
+                  <Text style={styles.summaryLabel}>Due date</Text>
+                  <Text style={styles.summaryValue} numberOfLines={1}>
+                    {formatDate(selectedPayment?.due)}
+                  </Text>
+                </View>
+                <View style={[styles.summaryCard, styles.summaryCardWide]}>
+                  <Text style={styles.summaryLabel}>Outstanding balance</Text>
+                  <Text style={[styles.summaryValue, { color: "#dc2626" }]}>
+                    {selectedPayment ? formatAmount(Number(selectedPayment.debt) || 0) : "-"}
+                  </Text>
                 </View>
               </View>
-            );
-          })
-        )}
-      </View>
 
-      <View style={styles.noteCard}>
-        <Text style={styles.noteText}>
-          Note: After you change billing frequency or plan and make a payment,
-          further changes can only be made 31 days after the due date.
-        </Text>
-      </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Enter amount to pay</Text>
+                <TextInput
+                  style={styles.amountInputLarge}
+                  placeholder="0"
+                  placeholderTextColor="#94a3b8"
+                  keyboardType="numeric"
+                  value={paymentAmount}
+                  onChangeText={(text) => setPaymentAmount(text.replace(/[^0-9]/g, ""))}
+                />
+              </View>
 
-      <View style={styles.saveWrap}>
-        <TouchableOpacity
-          style={[
-            styles.saveBtn,
-            (!isSaveDisabled || loadingPricing || loadingPayments) &&
-              styles.saveBtnDisabled,
-          ]}
-          activeOpacity={0.9}
-          onPress={handleBilling}
-          disabled={!isSaveDisabled || loadingPricing || loadingPayments}
-        >
-          <Text style={[styles.saveText, { color: "#fff" }]}>
-            🔒 Save Settings
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Secure token</Text>
+                <TextInput
+                  style={styles.amountInput}
+                  placeholder="Enter secure token"
+                  placeholderTextColor="#94a3b8"
+                  secureTextEntry
+                  value={secureTokenInput}
+                  onChangeText={(text) => setSecureTokenInput(text)}
+                />
+              </View>
+
+              <View style={styles.feeNote}>
+                <Text style={styles.feeNoteText}>Transaction fee is 2.5% of the payment amount.</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.modalPayButton}
+                activeOpacity={0.95}
+                onPress={() => {
+                  handlePayNow();
+                }}
+              >
+                <Text style={styles.modalPayText}>{loading ? "Processing..." : "Pay now"}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setShowPaymentModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </Modal>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#f6f8f9" },
   container: { paddingBottom: 40 },
-  header: { paddingTop: 20, paddingHorizontal: 14 },
+  header: { paddingVertical: 22, paddingHorizontal: 14 },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -379,141 +404,170 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  backText: { fontSize: 18 },
-  headerTitle: { color: "#fff", fontSize: 18 },
-
-  section: { marginTop: 14, paddingHorizontal: 14 },
-  sectionTitle: { marginBottom: 10 },
-
-  currentPlan: {
-    padding: 14,
-    borderRadius: 10,
-    backgroundColor: "#ecfff6",
-    borderWidth: 1,
-    borderColor: "#daf1e6",
-  },
-  planName: { fontSize: 16, marginBottom: 6, textTransform: "capitalize" },
-  planPrice: { color: "#0ea360" },
-
-  option: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: "#eef2f3",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  optionLeft: { flexDirection: "row", alignItems: "center" },
-  optionPrice: { color: "#0ea360" },
-
-  radioOuter: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: "#cfd8d9",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#0ea360",
-  },
-  radioSelected: { borderColor: "#0ea360" },
-
-  autoRow: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#eef2f3",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  autoLeft: { flex: 1 },
-
-  toggle: {
-    width: 54,
-    height: 30,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  toggleOff: { backgroundColor: "#eef0f2" },
-  toggleOn: { backgroundColor: "#d7f3e8" },
-  toggleCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: "#fff",
-  },
-  toggleCircleOn: { transform: [{ translateX: 12 }] },
-  toggleCircleOff: { transform: [{ translateX: -12 }] },
-
-  noteCard: {
-    marginTop: 12,
+  headerTitle: { fontSize: 18 },
+  loadingCard: {
     marginHorizontal: 14,
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: "#fff8e1",
+    borderRadius: 10,
+    padding: 16,
+    backgroundColor: "#eaf9f0",
     borderWidth: 1,
-    borderColor: "#ffecb5",
+    borderColor: "#d9f0e3",
   },
-  noteText: {
-    color: "#8a6d1f",
-    fontSize: 13,
-    lineHeight: 18,
-  },
-
-  dueDateRow: {
-    marginTop: 8,
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: "#f0f4ff",
+  emptyCard: {
+    marginHorizontal: 14,
+    borderRadius: 10,
+    padding: 16,
+    backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: "#dbeafe",
+    borderColor: "#eef2f3",
+  },
+  emptyTitle: { fontSize: 16, fontWeight: "700", color: "#0f172a" },
+  emptyText: { marginTop: 6, fontSize: 13, color: "#64748b" },
+  paymentCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    flexDirection: "column",
+    gap: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 3,
+  },
+  cardTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 12 },
+  planLabel: { fontSize: 16, fontWeight: "800", color: "#0f172a", lineHeight: 20 },
+  paymentMeta: { marginTop: 4, fontSize: 13, color: "#64748b", lineHeight: 18 },
+  statusBadge: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    alignSelf: "flex-start",
+    borderWidth: 1,
+  },
+  statusSuccess: {
+    backgroundColor: "#ecfdf5",
+    borderColor: "#a7f3d0",
+  },
+  statusPending: {
+    backgroundColor: "#eff6ff",
+    borderColor: "#bfdbfe",
+  },
+  statusText: { fontSize: 11, fontWeight: "800", letterSpacing: 0.2 },
+  statusTextSuccess: { color: "#166534" },
+  statusTextPending: { color: "#1d4ed8" },
+  amountGrid: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  amountBadge: {
+    flex: 1,
+    backgroundColor: "#dcfce7",
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    minWidth: 70,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#0ea360",
+  },
+  amountLabel: { fontSize: 12, color: "#0f172a", fontWeight: "600" },
+  amountValue: { fontSize: 16, color: "#0ea360", fontWeight: "700", marginTop: 2 },
+  debtBadge: {
+    flex: 1,
+    backgroundColor: "#fee2e2",
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    minWidth: 70,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#dc2626",
+  },
+  debtLabel: { fontSize: 12, color: "#0f172a", fontWeight: "600" },
+  debtValue: { fontSize: 16, color: "#dc2626", fontWeight: "700", marginTop: 2 },
+  payNowButton: {
+    width: "100%",
+    backgroundColor: "#0ea360",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  payNowText: { color: "#fff", fontWeight: "800", fontSize: 14 },
+  modalHeader: {
+    padding: 12,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  modalShell: { flex: 1, backgroundColor: "#f8fafc" },
+  modalHeaderRow: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 12,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+    backgroundColor: "#fff",
   },
-  dueDateLabel: {
-    color: "#1f2937",
-    fontWeight: "600",
+  modalEyebrow: { color: "#0ea360", fontSize: 12, fontWeight: "800", letterSpacing: 0.6, textTransform: "uppercase" },
+  modalHeaderTitle: { marginTop: 4, color: "#0f172a", fontSize: 18, fontWeight: "800" },
+  closeButtonWrap: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "#f8fafc", borderWidth: 1, borderColor: "#e2e8f0" },
+  closeButton: { fontSize: 16, color: "#0f172a", fontWeight: "700" },
+  modalTitle: { fontSize: 18, fontWeight: "700", marginBottom: 8, color: "#0f172a" },
+  modalTitleLarge: { fontSize: 20, fontWeight: "800", marginBottom: 6, color: "#0f172a" },
+  modalSubtitle: { marginTop: 4, color: "#64748b", fontSize: 13, lineHeight: 19 },
+  modalMeta: { marginBottom: 6, color: "#334155" },
+  modalContent: { padding: 16, paddingTop: 14, paddingBottom: 28, alignItems: "stretch" },
+  modalHeroCard: { backgroundColor: "#fff", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#e2e8f0", marginBottom: 12 },
+  badgeRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
+  categoryBadge: { backgroundColor: "#f1f5f9", paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8 },
+  categoryText: { color: "#0f172a", fontWeight: "700" },
+  summaryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 12 },
+  summaryCard: { flexBasis: "48%", flexGrow: 1, backgroundColor: "#fff", borderRadius: 14, padding: 12, borderWidth: 1, borderColor: "#e2e8f0" },
+  summaryCardWide: { flexBasis: "100%" },
+  summaryLabel: { color: "#64748b", fontSize: 12, fontWeight: "600", marginBottom: 6 },
+  summaryValue: { color: "#0f172a", fontSize: 14, fontWeight: "700" },
+  inputGroup: { marginBottom: 12 },
+  inputLabel: { marginBottom: 6, color: "#334155", fontSize: 13, fontWeight: "600" },
+  detailRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" },
+  detailLabel: { color: "#64748b", fontSize: 13 },
+  detailValue: { color: "#0f172a", fontSize: 14, fontWeight: "600" },
+  amountInput: {
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: "#1e293b",
   },
-  dueDateValue: {
-    color: "#0ea360",
-    fontWeight: "700",
-  },
-
-  saveWrap: { paddingHorizontal: 14, marginTop: 18 },
-  saveBtn: {
+  amountInputLarge: { backgroundColor: "#f8fafc", borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, padding: 16, fontSize: 18, color: "#0f172a", width: "100%" },
+  proceedButton: {
     backgroundColor: "#0ea360",
     height: 48,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },
-  saveBtnDisabled: {
+  proceedButtonDisabled: {
+    backgroundColor: "#94a3b8",
     opacity: 0.6,
   },
-  saveText: { color: "#fff" },
-  emptyText: { color: '#64748b', textAlign: 'center', paddingVertical: 12 },
-  payCard: { backgroundColor: '#fff', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#eef2f3', flexDirection: 'row', alignItems: 'center', marginTop: 12 },
-  payTitle: { fontSize: 15, fontWeight: '700' },
-  paySub: { color: '#64748b', marginTop: 4 },
-  payDate: { color: '#94a3b8', marginTop: 6, fontSize: 12 },
-  payAmount: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  freqBtn: { paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#e6e9eb', backgroundColor: '#fff', marginLeft: 6 },
-  freqBtnActive: { backgroundColor: '#f2fbf7', borderColor: '#0ea360' },
-  freqText: { fontSize: 12, color: '#334155' },
-  freqTextActive: { color: '#0ea360', fontWeight: '700' },
-  primaryBtn: { marginTop: 8, backgroundColor: '#0ea360', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  primaryText: { color: '#fff', fontWeight: '700' },
+  proceedText: { color: "#fff", fontSize: 16 },
+  modalPayButton: { backgroundColor: "#0ea360", paddingVertical: 14, borderRadius: 10, alignItems: "center", justifyContent: "center", marginTop: 16 },
+  modalPayText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  modalCancelButton: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#e2e8f0", paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center", marginTop: 10 },
+  modalCancelText: { color: "#374151", fontSize: 15, fontWeight: "600" },
+  errorBanner: { backgroundColor: "#fee2e2", paddingHorizontal: 12, paddingVertical: 14, marginVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: "#fecaca" },
+  errorText: { color: "#b91c1c", fontSize: 14, lineHeight: 20 },
+  feeNote: { marginTop: 2, padding: 12, borderRadius: 10, backgroundColor: "#f8fafc", borderWidth: 1, borderColor: "#e2e8f0" },
+  feeNoteText: { color: "#475569", fontSize: 13, lineHeight: 19 },
 });

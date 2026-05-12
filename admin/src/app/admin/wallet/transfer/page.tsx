@@ -140,14 +140,10 @@ function WalletPage() {
         return;
       }
 
-      console.log("Initiating transfer with data:", formData);
-
       if (!formData.pin) {
           setTransferError("Enter a valid security code");
           return;
       }
-
-      console.log("Initiating transfer with data:", formData);
 
       // Here you would call the initiateTransfer function from your wallet service, passing the amount, recipientCode, and reason from the formData
       const init = await initiateTransfer(

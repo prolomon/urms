@@ -143,8 +143,8 @@ export async function getBanks() {
   return data;
 }
 
-export async function getTransactions(id: string): Promise<{ ok: boolean; transactions?: Wallet; message?: string }> {
-  const response = await fetch(`${API_URL}/transaction/user/${id}`, {
+export async function getTransactions(id: string, page: number, limit: number, fromDate: Date, toDate: Date, reference: string, event: string, status: string): Promise<{ ok: boolean; transactions?: Wallet; message?: string }> {
+  const response = await fetch(`${API_URL}/transaction/user/${id}?page=${page}&limit=${limit}&fromDate=${fromDate}&toDate=${toDate}&reference=${reference}&event=${event}&status=${status}`, {
     method: "GET",
     headers: { ...buildHeaders(true) },
   });

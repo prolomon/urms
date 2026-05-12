@@ -28,7 +28,7 @@ export default function CompleteProfileScreen() {
     const [confirmSecurityCode, setConfirmSecurityCode] = useState("");
     const [loading, setLoading] = useState(false);
     const [idType, setIdType] = useState<"BVN" | "NIN">("BVN");
-
+    
     useEffect(() => {
         if (currentUser?.uid) {
             setUid(currentUser.uid);

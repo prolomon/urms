@@ -117,7 +117,7 @@ export type AuthContextValue = {
   loading: boolean;
   login: (
     uid: string,
-    password: string
+    password: string,
   ) => Promise<{
     ok: boolean;
     message?: string;
@@ -129,7 +129,7 @@ export type AuthContextValue = {
     uid: string,
     password: string,
     confirm: string,
-    old: string
+    old: string,
   ) => Promise<{ ok: boolean; message?: string; error?: string }>;
   notifications: () => Promise<Notification[]>;
   receipt: (reference: string) => Promise<Payment | any>;
@@ -150,15 +150,15 @@ export type AuthContextValue = {
   token: string;
   createCode: (
     secureToken: string,
-    confirmSecureToken: string
+    confirmSecureToken: string,
   ) => Promise<{ ok: boolean; message?: string; error?: string }>;
   changeCode: (
     oldSecureToken: string,
     newSecureToken: string,
-    confirmSecureToken: string
+    confirmSecureToken: string,
   ) => Promise<{ ok: boolean; message?: string; error?: string }>;
   verifyCode: (
-    secureToken: string
+    secureToken: string,
   ) => Promise<{ ok: boolean; message?: string; error?: string }>;
   uid?: string;
 };
@@ -195,13 +195,12 @@ export type Wallet = {
   verify?: boolean;
 };
 
-export enum TransactionStatus {
-  PENDING,
-  SUCCESS,
-  FAILED,
-  REFUNDED,
-  CANCELLED,
-}
+export type TransactionStatus =
+  | "PENDING"
+  | "SUCCESS"
+  | "FAILED"
+  | "REFUNDED"
+  | "CANCELLED";
 
 export type Transaction = {
   id: string;
@@ -215,9 +214,30 @@ export type Transaction = {
   customerEmail: string | null;
   paymentReference: string | null;
   userId: string | null;
-  metadata: object | null;
-  rawPayload: object | null;
+  metadata: any | null;
+  rawPayload: any | null;
   createdAt: Date;
   updatedAt: Date;
   payment: string;
 };
+
+export type PaymentTransaction = {
+  id: string;
+  reference: string;
+  userId: string;
+  pricingId: string;
+  companyId: string;
+  centerId: string
+  amount: string;
+  currency: string
+  paymentId: string;
+  date: Date;
+  type: string;
+  category: string
+  name: string;
+  billing: string;
+  status: TransactionStatus;
+  metadata: any | null;
+  createdAt: Date;
+  updatedAt: Date;
+}

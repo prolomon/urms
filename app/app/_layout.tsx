@@ -25,7 +25,7 @@ export default function RootLayout() {
               <Stack.Screen name="payment" options={{ headerShown: false }} />
               <Stack.Screen name="complete" options={{ headerShown: false }} />
               <Stack.Screen name="transfer" options={{ headerShown: false }} />
-              <Stack.Screen name="payments" options={{ headerShown: false }} />
+              <Stack.Screen name="transaction" options={{ headerShown: false }} />
               <Stack.Screen name="agent" options={{ headerShown: false }} />
               <Stack.Screen name="(pages)" options={{ headerShown: false }} />
               <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />

@@ -1,5 +1,5 @@
  import { API_URL, buildHeaders } from "../api";
- import { Payment } from "../types";
+ import { Payment, PaymentTransaction } from "../types";
 
  export async function getPayments(uid: string, token: string): Promise<{ok: boolean; payments?: Payment[]; message?: string}> { 
     if (!uid) {
@@ -77,7 +77,7 @@ export async function schedulePayment(userId: string, frequency: string, amount:
     return data;
 }
 
-export async function makePayment (userId: string, amount: number, paymentId: string, center: string, company: string, token: string): Promise<{
+export async function makePayment (userId: string, amount: number, paymentId: string, center: string, company: string, pin: string, token: string): Promise<{
     ok: boolean;
     payment?: any;
     message?: string;
@@ -88,11 +88,39 @@ export async function makePayment (userId: string, amount: number, paymentId: st
     const response = await fetch(`${API_URL}/payment/make/${userId}/${paymentId}`, {
         method: "POST",
         headers: buildHeaders(true, token),
-        body: JSON.stringify({ amount, center, company }),
+        body: JSON.stringify({ amount, center, company, pin }),
     });
     const data = await response.json();
     if (!response.ok) {
         throw new Error(data.message || "Failed to make payment");
+    }
+    return data;
+}
+
+export async function getRecords(uid: string, token: string): Promise<{ok: boolean;transactions?: PaymentTransaction[]; message?: string}> { 
+    if (!uid) {
+        throw new Error("No user ID found");
+    }
+    const response = await fetch(`${API_URL}/payment-transaction/user/member/${uid}`, {
+        headers: buildHeaders(true, token),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || "Failed to fetch payments");
+    }
+    return data;
+}
+
+export async function getRecord(id: string, token: string): Promise<{ok: boolean; transaction?: PaymentTransaction; message?: string}> { 
+    if (!id) {
+        throw new Error("No record ID found");
+    }
+    const response = await fetch(`${API_URL}/payment-transaction/reference/${id}`, {
+        headers: buildHeaders(true, token),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || "Failed to fetch payment");
     }
     return data;
 }

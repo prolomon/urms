@@ -2,11 +2,15 @@ import { API_URL, buildHeaders } from "@/lib/api";
 import { Transaction } from "../types";
 
 export async function getTransactions(
-  id: string
+  id: string,
+  token: string,
+  fromDate?: string,
+  toDate?: string,
+  query?: string
 ): Promise<{ ok: boolean; transactions?: Transaction[]; message?: string }> {
-  const response = await fetch(`${API_URL}/transaction/user/${id}`, {
+  const response = await fetch(`${API_URL}/transaction/user/${id}?fromDate=${fromDate}&toDate=${toDate}&query=${query}`, {
     method: "GET",
-    headers: { ...buildHeaders() },
+    headers: { ...buildHeaders(true, token) },
   });
 
   if (!response.ok) {
@@ -19,11 +23,12 @@ export async function getTransactions(
 }
 
 export async function getTransaction(
-  id: string
+  id: string,
+  token: string
 ): Promise<{ ok: boolean; transaction?: Transaction; message?: string }> {
   const response = await fetch(`${API_URL}/transaction/${id}`, {
     method: "GET",
-    headers: { ...buildHeaders() },
+    headers: { ...buildHeaders(true, token) },
   });
 
   if (!response.ok) {

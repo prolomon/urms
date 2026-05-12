@@ -20,6 +20,7 @@ const nombaWebhook = async (req, res) => {
     const merchant = event.data?.merchant || {};
     const aliasRef = txn?.aliasAccountReference || txn?.aliasAccountNumber || null;
     const amount = Number(txn?.transactionAmount ?? 0);
+    const fee = Number(txn?.fee ?? 0);
     const merchantUserId = merchant?.userId || null;
     const walletId = merchant?.walletId || null;
     const senderDetails = event.data?.customer || {};
@@ -57,7 +58,7 @@ const nombaWebhook = async (req, res) => {
       // Could not find a wallet to credit; record transaction and return
       await prisma.transaction.create({
         data: {
-          reference: transactionReference,
+          reference: `${transactionReference}-MERCHANT-PENDING`,
           merchantTxRef: merchantUserId,
           event: 'nomba.payment_success',
           status: 'PENDING',
@@ -101,11 +102,11 @@ const nombaWebhook = async (req, res) => {
     console.log('Wallet found:', wallet.id, 'Current balance:', wallet.balance);
 
     // Update wallet balance atomically
-    const newBalance = Number(wallet.balance ?? 0) + Number(amount);
+    const newBalance = Number(wallet.balance ?? 0) + Number(amount - fee);
 
     const updatedWallet = await prisma.wallet.update({
       where: { id: wallet.id },
-      data: { balance: merchant.walletBalance || newBalance },
+      data: { balance: newBalance },
     });
 
     console.log('Wallet updated. New balance:', newBalance);
@@ -113,7 +114,7 @@ const nombaWebhook = async (req, res) => {
     // Record transaction
     const transact = await prisma.transaction.create({
       data: {
-        reference: transactionReference,
+        reference: `${transactionReference}-MERCHANT`,
         merchantTxRef: wallet.userId,
         event: 'nomba.payment.credit',
         status: 'SUCCESS',

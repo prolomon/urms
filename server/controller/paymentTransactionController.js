@@ -59,23 +59,34 @@ const createPaymentTransaction = async (req, res) => {
 
 const getPaymentTransactionsByUserId = async (req, res) => {
   try {
-    const { userId } = req.params;
+    const { userId, type } = req.params;
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
     const skip = (page - 1) * limit;
-
+ 
     if (!userId) {
       return res.status(400).json({ ok: false, message: 'User ID is required' });
     }
 
+    // Build where clause based on type
+    let where = {};
+    if (type === 'COMPANY') {
+      where.companyId = userId;
+    } else if (type === 'CENTER') {
+      where.centerId = userId;
+    } else {
+      // Default to MEMBER or any other type
+      where.userId = userId;
+    }
+
     const [transactions, total] = await Promise.all([
       prisma.paymentTransaction.findMany({
-        where: { userId },
+        where,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
       }),
-      prisma.paymentTransaction.count({ where: { userId } }),
+      prisma.paymentTransaction.count({ where }),
     ]);
 
     return res.status(200).json({
@@ -221,7 +232,7 @@ const updatePaymentTransaction = async (req, res) => {
     return res.status(500).json({ ok: false, message: err?.message || 'Server error' });
   }
 };
-
+ 
 export {
   createPaymentTransaction,
   getPaymentTransactionsByUserId,

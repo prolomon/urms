@@ -95,7 +95,7 @@ const createPaymentSchema = Joi.object({
   const makePaymentSchema = Joi.object({
     amount: Joi.number().min(100).required().messages({
       'number.base': 'Amount must be a number',
-      'number.min': 'Amount must be at least 0',
+      'number.min': 'Amount must be at least 100',
       'any.required': 'Amount is required',
     }),
     center: Joi.string().trim().optional().messages({
@@ -103,6 +103,9 @@ const createPaymentSchema = Joi.object({
     }),
     company: Joi.string().trim().optional().messages({
       'string.base': 'Company must be a string',
+    }),
+    pin: Joi.string().trim().optional().messages({
+      'string.base': 'PIN must be a string',
     }),
   });
 

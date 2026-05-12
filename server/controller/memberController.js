@@ -61,7 +61,9 @@ const memberSafeSelect = {
   createdAt: true,
   updatedAt: true,
   pricing: true,
-  company: true
+  company: true,
+  notifications: true,
+  payments: true
 };
 
 const looksLikeJwt = (value) => typeof value === "string" && value.split(".").length === 3;
@@ -464,7 +466,6 @@ const login = async (req, res) => {
         phone: true,
         type: true,
         billingFrequency: true,
-        password: true,
         location: true,
         avatar: true,
         status: true,
@@ -472,6 +473,11 @@ const login = async (req, res) => {
         agent: true,
         createdAt: true,
         updatedAt: true,
+        password: true,
+        category: true,
+        pricing: true,
+        company: true,
+        agent: true,
       },
     });
 

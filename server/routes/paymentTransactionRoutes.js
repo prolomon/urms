@@ -19,7 +19,7 @@ router.post('/', authMiddleware, roleMiddleware(['user', 'admin', 'company']), c
 router.get('/', authMiddleware, roleMiddleware(['admin']), getAllPaymentTransactions);
 
 // Get payment transactions by user ID
-router.get('/user/:userId', authMiddleware, roleMiddleware(['user', 'admin']), getPaymentTransactionsByUserId);
+router.get('/user/:type/:userId', authMiddleware, roleMiddleware(['user', 'admin']), getPaymentTransactionsByUserId);
 
 // Get payment transactions by payment ID
 router.get('/payment/:paymentId', authMiddleware, roleMiddleware(['user', 'admin']), getPaymentTransactionsByPaymentId);

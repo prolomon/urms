@@ -1,3 +1,4 @@
+import { ref } from "process";
 import { prisma } from "../config/db.js";
 import { createTransactionSchema } from "../validator/transactionValidator.js";
 
@@ -13,6 +14,28 @@ const validationErrorResponse = (res, error) => {
 const normalizeAmount = (amount) => {
   const numericAmount = Number(amount);
   return Number.isFinite(numericAmount) ? numericAmount : null;
+};
+
+const parseDateParam = (value, endOfDay = false) => {
+  if (!value) return null;
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw);
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return null;
+
+  // For YYYY-MM-DD filters, include full end day or start day in UTC.
+  if (isDateOnly) {
+    if (endOfDay) {
+      date.setUTCHours(23, 59, 59, 999);
+    } else {
+      date.setUTCHours(0, 0, 0, 0);
+    }
+  }
+
+  return date;
 };
 
 const createTransaction = async (req, res) => {
@@ -103,7 +126,7 @@ const getAllTransactions = async (req, res) => {
 
 const getTransactionsByUserId = async (req, res) => {
   try {
-    const { userId } = req.params;
+    const { userId } = req.params; 
 
     if (!userId) {
       return res.status(400).json({ ok: false, message: "User ID is required" });
@@ -112,13 +135,14 @@ const getTransactionsByUserId = async (req, res) => {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
     const skip = (page - 1) * limit;
-    const email = String(req.query.email || "").trim();
 
     const sort = (String(req.query.sort || 'desc').toLowerCase() === 'asc') ? 'asc' : 'desc';
     const eventFilter = req.query.event ? String(req.query.event).trim() : null;
+    const reference = req.query.reference ? String(req.query.reference).trim() : null;
+    const status = req.query.status ? String(req.query.status).trim() : null;
 
-    const fromDate = req.query.fromDate ? new Date(req.query.fromDate) : null;
-    const toDate = req.query.toDate ? new Date(req.query.toDate) : null;
+    const fromDate = parseDateParam(req.query.fromDate || req.query.formDate);
+    const toDate = parseDateParam(req.query.toDate, true);
 
     const where = {
       AND: [
@@ -126,7 +150,7 @@ const getTransactionsByUserId = async (req, res) => {
           OR: [
             { userId },
             { merchantTxRef: userId },
-            ...(email ? [{ customerEmail: email }] : []),
+            ...(reference ? [{ reference }] : []),
           ],
         },
       ],
@@ -134,6 +158,10 @@ const getTransactionsByUserId = async (req, res) => {
 
     if (eventFilter) {
       where.AND.push({ event: eventFilter });
+    }
+
+    if (status) {
+      where.AND.push({ status });
     }
 
     if (fromDate || toDate) {
@@ -172,7 +200,7 @@ const getTransactionsByUserId = async (req, res) => {
 
 const getTransactionsByReference = async (req, res) => {
   try {
-    const { reference } = req.params;
+    const reference = String(req.query.query || req.query.reference || "").trim();
 
     if (!reference) {
       return res.status(400).json({ ok: false, message: "Reference is required" });
@@ -203,7 +231,7 @@ const getTransactionById = async (req, res) => {
     }
 
     const transaction = await prisma.transaction.findUnique({
-      where: { id }
+      where: { reference: id },
     });
 
     if (!transaction) {
@@ -222,4 +250,4 @@ export {
   getTransactionsByUserId,
   getTransactionsByReference,
   getTransactionById,
-};1
+};

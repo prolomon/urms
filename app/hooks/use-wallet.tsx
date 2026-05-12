@@ -2,9 +2,10 @@
 import { AUTH_MEMBER, AUTH_MEMBER_TOKEN, AUTH_MEMBER_WALLET, AUTH_MEMBER_WALLET_STATE } from "@/lib/api";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { getWallet, createWallet, initiateTransfer, resolveBankAccount, getBanks, getTransactions } from "@/lib/services/wallet";
+import { getWallet, createWallet, initiateTransfer, resolveBankAccount, getBanks } from "@/lib/services/wallet";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Wallet } from "@/lib/types";
+import { getTransactions, getTransaction } from "@/lib/services/transaction";
 
 const walletContext = createContext<any>(null);
 
@@ -114,6 +115,7 @@ export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
         resolveBankAccount,
         getBanks,
         getTransactions,
+        getTransaction,
         createWallet
     };
 

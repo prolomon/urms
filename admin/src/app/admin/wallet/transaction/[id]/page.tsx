@@ -48,7 +48,7 @@ function TransactionDetailPage() {
     const router = useRouter();
     const params = useParams();
     const transactionId = params.id as string;
-    const { wallet, getTransactions } = useWallet();
+    const { wallet, getTransaction } = useWallet();
     const { user } = useAuth();
     
     const [transaction, setTransaction] = useState<Transaction | null>(null);
@@ -57,8 +57,8 @@ function TransactionDetailPage() {
     const [copiedField, setCopiedField] = useState<string | null>(null);
 
     useEffect(() => {
-        // Load via WalletContext getTransactions and find transaction by id
-        const fetchAllAndFind = async () => {
+        // Load via WalletContext getTransaction
+        const fetchTransaction = async () => {
             setLoading(true);
             setError(null);
             try {
@@ -69,19 +69,10 @@ function TransactionDetailPage() {
                     return;
                 }
 
-                const res: any = await getTransactions(userId);
-                if (res?.ok && res?.transactions) {
-                    // try to find array in common locations used by other pages
-                    const results = res.transactions?.data?.results || res.transactions?.data || res.transactions || [];
-                    const items: any[] = Array.isArray(results) ? results : (results?.results || []);
-
-                    const found = items.find((t: any) => String(t.id) === String(transactionId) || String(t.reference) === String(transactionId) || String(t.sessionId) === String(transactionId));
-                    if (found) {
-                        setTransaction(found as Transaction);
-                    } else {
-                        setError("Transaction not found");
-                    }
-                } else {
+                const res: any = await getTransaction(transactionId);
+                if (res?.ok && res?.transaction) {
+                    setTransaction(res.transaction as Transaction);
+                }else {
                     setError(res?.message || "Failed to fetch transactions");
                 }
             } catch (err) {
@@ -92,8 +83,8 @@ function TransactionDetailPage() {
             }
         };
 
-        fetchAllAndFind();
-    }, [transactionId, getTransactions, user?.uid, wallet?.id, wallet?.userId]);
+        fetchTransaction();
+    }, [transactionId, getTransaction, user?.uid, wallet?.id, wallet?.userId]);
 
     const handleCopy = (text: string, field: string) => {
         navigator.clipboard.writeText(text);
@@ -183,7 +174,7 @@ function TransactionDetailPage() {
 
     const getTransactionTypeIcon = (type: string) => {
         const normalizedType = (type || "").toLowerCase();
-        return normalizedType === "credit" ? (
+        return normalizedType === "nomba.payment.credit" ? (
             <ArrowDownLeft className="h-5 w-5 text-emerald-600" />
         ) : (
             <ArrowUpRight className="h-5 w-5 text-rose-600" />
@@ -238,7 +229,7 @@ function TransactionDetailPage() {
     }
 
     const transactionType = (transaction.event || "").toLowerCase();
-    const isCredit = transactionType === "credit";
+    const isCredit = transactionType === "nomba.payment.credit";
 
     return (
         <div className="mx-auto max-w-7xl p-4 md:p-6 space-y-4 md:space-y-5">
@@ -289,7 +280,7 @@ function TransactionDetailPage() {
                     </div>
                     <div>
                         <p className="text-xs uppercase tracking-wide text-slate-500">Type</p>
-                        <p className="mt-1 font-semibold text-slate-900 capitalize">{transaction.event || "—"}</p>
+                        <p className="mt-1 font-semibold text-slate-900 capitalize">{transaction.event ? "CREDIT" : "DEBIT"}</p>
                     </div>
                     <div>
                         <p className="text-xs uppercase tracking-wide text-slate-500">Date</p>
@@ -305,72 +296,72 @@ function TransactionDetailPage() {
                     <div className="grid gap-3">
                     <CopyableField label="Reference" value={transaction.reference || transaction.id || ""} copiedField={copiedField} onCopy={handleCopy} />
                     <CopyableField label="Transaction Amount" value={String(transaction.amount || "")} copiedField={copiedField} onCopy={handleCopy} />
-                    <CopyableField label="Charge" value={(transaction as any).fixedCharge || ""} copiedField={copiedField} onCopy={handleCopy} />
-                    <CopyableField label="Narration" value={(transaction as any).narration || ""} copiedField={copiedField} onCopy={handleCopy} />
+                    <CopyableField label="Currency" value={transaction.currency || "NGN"} copiedField={copiedField} onCopy={handleCopy} />
+                    <CopyableField label="Narration" value={(transaction as any).metadata?.narration || (transaction as any).gatewayResponse || ""} copiedField={copiedField} onCopy={handleCopy} />
+                    <CopyableField label="Channel" value={transaction.channel || ""} copiedField={copiedField} onCopy={handleCopy} />
                 </div>
             </div>
 
-            {/* Account Details */}
-            {(((transaction as any).senderName) || ((transaction as any).ktaSenderAccountNumber)) && (
+            {/* Sender Details */}
+            {(((transaction as any).metadata?.senderName) || ((transaction as any).metadata?.senderAccountNumber)) && (
                 <div className="rounded-2xl bg-white p-5 md:p-6 ring-1 ring-slate-100 shadow-sm space-y-4">
                     <h2 className="text-lg font-semibold text-slate-900">Sender Details</h2>
 
                     <div className="grid gap-3">
-                        <CopyableField label="Sender Name" value={(transaction as any).senderName || (transaction as any).ktaSenderName || ""} copiedField={copiedField} onCopy={handleCopy} />
-                        <CopyableField label="Sender Account Number" value={(transaction as any).ktaSenderAccountNumber || ""} copiedField={copiedField} onCopy={handleCopy} />
-                        <CopyableField label="Sender Bank Code" value={(transaction as any).ktaSenderBankCode || ""} copiedField={copiedField} onCopy={handleCopy} />
+                        <CopyableField label="Sender Name" value={(transaction as any).metadata?.senderName || ""} copiedField={copiedField} onCopy={handleCopy} />
+                        <CopyableField label="Sender Account Number" value={(transaction as any).metadata?.senderAccountNumber || ""} copiedField={copiedField} onCopy={handleCopy} />
+                        <CopyableField label="Sender Bank Code" value={(transaction as any).metadata?.senderBankCode || ""} copiedField={copiedField} onCopy={handleCopy} />
+                        <CopyableField label="Sender Bank Name" value={(transaction as any).metadata?.senderBankName || ""} copiedField={copiedField} onCopy={handleCopy} />
                     </div>
                 </div>
             )}
 
-            {/* Recipient Details */}
-            {(((transaction as any).recipientAccountName) || ((transaction as any).recipientAccountNumber)) && (
+            {/* Alias Account Details (Virtual Account) */}
+            {(((transaction as any).metadata?.aliasAccountName) || ((transaction as any).metadata?.aliasAccountNumber)) && (
                 <div className="rounded-2xl bg-white p-5 md:p-6 ring-1 ring-slate-100 shadow-sm space-y-4">
-                    <h2 className="text-lg font-semibold text-slate-900">Recipient Details</h2>
+                    <h2 className="text-lg font-semibold text-slate-900">Alias Account Details</h2>
 
                     <div className="grid gap-3">
-                        <CopyableField label="Recipient Name" value={(transaction as any).recipientAccountName || ""} copiedField={copiedField} onCopy={handleCopy} />
-                        <CopyableField label="Recipient Account Number" value={(transaction as any).recipientAccountNumber || ""} copiedField={copiedField} onCopy={handleCopy} />
-                        <CopyableField label="Recipient Account Type" value={(transaction as any).recipientAccountType || ""} copiedField={copiedField} onCopy={handleCopy} />
-                        <CopyableField label="Bank Name" value={(transaction as any).bankName || ""} copiedField={copiedField} onCopy={handleCopy} />
-                        <CopyableField label="Bank Code" value={(transaction as any).bankCode || ""} copiedField={copiedField} onCopy={handleCopy} />
+                        <CopyableField label="Alias Account Name" value={(transaction as any).metadata?.aliasAccountName || ""} copiedField={copiedField} onCopy={handleCopy} />
+                        <CopyableField label="Alias Account Number" value={(transaction as any).metadata?.aliasAccountNumber || ""} copiedField={copiedField} onCopy={handleCopy} />
+                        <CopyableField label="Alias Account Type" value={(transaction as any).metadata?.aliasAccountType || ""} copiedField={copiedField} onCopy={handleCopy} />
+                        <CopyableField label="Alias Account Reference" value={(transaction as any).metadata?.aliasAccountReference || ""} copiedField={copiedField} onCopy={handleCopy} />
                     </div>
                 </div>
             )}
 
-            {/* Vendor & Reference Information */}
+            {/* Reference & Transaction Information */}
             <div className="rounded-2xl bg-white p-5 md:p-6 ring-1 ring-slate-100 shadow-sm space-y-4">
-                <h2 className="text-lg font-semibold text-slate-900">Vendor & Reference Information</h2>
+                <h2 className="text-lg font-semibold text-slate-900">Reference Information</h2>
 
                     <div className="grid gap-3">
-                    <CopyableField label="Billing Vendor Reference" value={(transaction as any).billingVendorReference || (transaction as any).paymentReference || ""} copiedField={copiedField} onCopy={handleCopy} />
-                    <CopyableField label="Payment Vendor Reference" value={(transaction as any).paymentVendorReference || (transaction as any).paymentReference || ""} copiedField={copiedField} onCopy={handleCopy} />
-                    <CopyableField label="Product ID" value={(transaction as any).productId || ""} copiedField={copiedField} onCopy={handleCopy} />
-                    <CopyableField label="Source" value={(transaction as any).source || ""} copiedField={copiedField} onCopy={handleCopy} />
+                    <CopyableField label="Merchant Transaction Reference" value={(transaction as any).merchantTxRef || ""} copiedField={copiedField} onCopy={handleCopy} />
+                    <CopyableField label="Transaction ID" value={(transaction as any).metadata?.transactionId || (transaction as any).reference || ""} copiedField={copiedField} onCopy={handleCopy} />
+                    <CopyableField label="Request ID" value={(transaction as any).metadata?.requestId || ""} copiedField={copiedField} onCopy={handleCopy} />
+                    <CopyableField label="Session ID" value={(transaction as any).metadata?.sessionId || ""} copiedField={copiedField} onCopy={handleCopy} />
                 </div>
             </div>
 
-            {/* Financial Details */}
+            {/* Transaction Status & Type */}
             <div className="rounded-2xl bg-white p-5 md:p-6 ring-1 ring-slate-100 shadow-sm space-y-4">
-                <h2 className="text-lg font-semibold text-slate-900">Financial Details</h2>
+                <h2 className="text-lg font-semibold text-slate-900">Transaction Status & Type</h2>
 
                     <div className="grid gap-3">
-                    <CopyableField label="Wallet Balance" value={(transaction as any).walletBalance || ""} copiedField={copiedField} onCopy={handleCopy} />
-                    <CopyableField label="Wallet Currency" value={(transaction as any).walletCurrency || ""} copiedField={copiedField} onCopy={handleCopy} />
-                    <CopyableField label="Currency" value={transaction.currency || ""} copiedField={copiedField} onCopy={handleCopy} />
-                    <CopyableField label="Customer Commission" value={(transaction as any).customerCommission || ""} copiedField={copiedField} onCopy={handleCopy} />
+                    <CopyableField label="Gateway Response" value={transaction.gatewayResponse || ""} copiedField={copiedField} onCopy={handleCopy} />
+                    <CopyableField label="Transaction Type" value={(transaction as any).metadata?.transactionType || ""} copiedField={copiedField} onCopy={handleCopy} />
+                    <CopyableField label="Transaction Type Name" value={(transaction as any).metadata?.transactionTypeName || ""} copiedField={copiedField} onCopy={handleCopy} />
+                    <CopyableField label="Originating From" value={(transaction as any).metadata?.originatingFrom || ""} copiedField={copiedField} onCopy={handleCopy} />
                 </div>
             </div>
 
-            {/* Terminal & Location Info */}
+            {/* Metadata Information */}
             <div className="rounded-2xl bg-white p-5 md:p-6 ring-1 ring-slate-100 shadow-sm space-y-4">
-                <h2 className="text-lg font-semibold text-slate-900">Terminal & Location</h2>
+                <h2 className="text-lg font-semibold text-slate-900">Metadata Information</h2>
 
                 <div className="grid gap-3">
-                    <CopyableField label="POS Terminal ID" value={(transaction as any).posTid || ""} copiedField={copiedField} onCopy={handleCopy} />
-                    <CopyableField label="POS Serial Number" value={(transaction as any).posSerialNumber || ""} copiedField={copiedField} onCopy={handleCopy} />
-                    <CopyableField label="Receipt Terminal ID" value={(transaction as any).receiptTerminalId || ""} copiedField={copiedField} onCopy={handleCopy} />
-                    <CopyableField label="Customer Biller ID" value={(transaction as any).customerBillerId || ""} copiedField={copiedField} onCopy={handleCopy} />
+                    <CopyableField label="Role" value={(transaction as any).metadata?.role || ""} copiedField={copiedField} onCopy={handleCopy} />
+                    <CopyableField label="Credited Amount" value={String((transaction as any).metadata?.creditedAmount || transaction.amount || "")} copiedField={copiedField} onCopy={handleCopy} />
+                    <CopyableField label="Payment Time" value={formatDate((transaction as any).metadata?.time)} copiedField={copiedField} onCopy={handleCopy} />
                 </div>
             </div>
 

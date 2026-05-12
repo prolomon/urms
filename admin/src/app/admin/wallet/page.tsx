@@ -26,8 +26,8 @@ function WalletPage() {
     const router = useRouter();
     const [load, setLoad] = useState(false);
     const [query, setQuery] = useState("");
-    const [statusFilter, setStatusFilter] = useState<"all" | WalletTransactionStatus>("all");
-    const [typeFilter, setTypeFilter] = useState<"all" | WalletTransactionType>("all");
+    const [statusFilter, setStatusFilter] = useState<string>("");
+    const [typeFilter, setTypeFilter] = useState<string>("");
     const [copyMessage, setCopyMessage] = useState("");
     const { user } = useAuth();
     const { wallet, isWallet, loading, error, message, refresh, setUid, getTransactions } = useWallet();
@@ -39,9 +39,10 @@ function WalletPage() {
         setLoad(true);
         if (wallet) {
             try {
-                const res = await getTransactions(user.uid);
-                if (res.ok && res.transactions?.data?.results) {
-                    setTransactions(res.transactions.data.results);
+                const res = await getTransactions(user.uid, 1, 100, fromDate, toDate, query, typeFilter, statusFilter);
+
+                if (res.transactions) {
+                    setTransactions(res.transactions);
                 } else {
                     setTransactions([]);
                 }
@@ -52,7 +53,7 @@ function WalletPage() {
                 setLoad(false);
             }
         }
-    }, [wallet, getTransactions, user.uid]);
+    }, [wallet, getTransactions, user.uid, fromDate, toDate, query, typeFilter, statusFilter]);
 
     useEffect(() => {
         fetChTransactions();
@@ -80,46 +81,6 @@ function WalletPage() {
             currency: 'NGN',
         }).format(value);
     };
-
-    const filteredTransactions = useMemo(() => {
-        const queryValue = query.trim().toLowerCase();
-
-        return transactions.filter((item) => {
-            const itemEvent = String(item?.event || "").toLowerCase();
-            const itemStatus = String(item?.status || "").toLowerCase();
-            const itemDate = new Date(item?.createdAt || item?.updatedAt || "");
-
-            const matchesQuery = !queryValue || [
-                item?.reference,
-                item?.id,
-                item?.paymentReference,
-                item?.customerEmail,
-            ]
-                .filter(Boolean)
-                .some((value) => String(value).toLowerCase().includes(queryValue));
-
-            const matchesStatus =
-                statusFilter === "all" || itemStatus === statusFilter.toLowerCase();
-
-            const matchesType =
-                typeFilter === "all" || itemEvent === typeFilter.toLowerCase();
-
-            const matchesDate = (() => {
-                if (Number.isNaN(itemDate.getTime())) return true;
-                const from = fromDate ? new Date(fromDate) : null;
-                const to = toDate ? new Date(toDate) : null;
-                if (from && itemDate < from) return false;
-                if (to) {
-                    const endOfDay = new Date(to);
-                    endOfDay.setHours(23, 59, 59, 999);
-                    if (itemDate > endOfDay) return false;
-                }
-                return true;
-            })();
-
-            return matchesQuery && matchesStatus && matchesType && matchesDate;
-        });
-    }, [transactions, query, statusFilter, typeFilter, fromDate, toDate]);
 
     // This is for the balance calculations, we can connect this to the backend later
     const balances = useMemo(() => {
@@ -309,7 +270,7 @@ function WalletPage() {
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                     <div>
                         <h2 className="text-lg font-semibold text-slate-900">Transactions</h2>
-                        <p className="text-sm text-slate-500">{filteredTransactions.length} result(s)</p>
+                        <p className="text-sm text-slate-500">{transactions.length} result(s)</p>
                     </div>
                     <button
                         type="button"
@@ -326,7 +287,7 @@ function WalletPage() {
                         <input
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}
-                            placeholder="Search by title or reference"
+                            placeholder="reference"
                             className="w-full rounded-xl border border-slate-400 bg-transparent pl-9 pr-3 py-2.5 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 text-slate-600"
                         />
                     </div>
@@ -345,10 +306,10 @@ function WalletPage() {
                                 }
                                 className="w-full appearance-none rounded-xl border border-slate-400 bg-transparent pl-9 pr-3 py-2.5 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 text-slate-600"
                             >
-                                <option value="all">All statuses</option>
-                                <option value="success">Success</option>
-                                <option value="pending">Pending</option>
-                                <option value="failed">Failed</option>
+                                <option value="all" hidden>All statuses</option>
+                                <option value="SUCCESS">Success</option>
+                                <option value="PENDING">Pending</option>
+                                <option value="FAILED">Failed</option>
                             </select>
                         </div>
                     </div>
@@ -363,9 +324,9 @@ function WalletPage() {
                             onChange={(event) => setTypeFilter(event.target.value as "all" | WalletTransactionType)}
                             className="w-full rounded-xl border border-slate-400 bg-transparent px-3 py-2.5 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 appearance-none text-slate-600"
                         >
-                            <option value="all">All types</option>
-                            <option value="credit">Credit</option>
-                            <option value="debit">Debit</option>
+                            <option value="all" hidden>All types</option>
+                            <option value="nomba.payment.credit">Credit</option>
+                            <option value="nomba.payment.debit">Debit</option>
                         </select>
                     </div>
                 </div>
@@ -405,20 +366,22 @@ function WalletPage() {
                                 <th className="py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Date</th>
                                 <th className="py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
                                 <th className="py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Amount</th>
+                                <th className="py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Channel</th>
+                                <th className="py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Currency</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredTransactions.length === 0 ? (
+                            {transactions.length === 0 ? (
                                 <tr>
                                     <td className="py-8 text-center text-sm text-slate-500" colSpan={5}>
                                         No transactions match your filters.
                                     </td>
                                 </tr>
                             ) : (
-                                filteredTransactions.map((item) => (
+                                transactions.map((item) => (
                                     <tr key={item.id} className="border-b border-slate-100 last:border-b-0">
-                                        <td className="py-4 text-sm font-medium text-slate-800"><Link href={`/admin/transactions/${item.id}`}>{item.reference || item.id}</Link></td>
-                                        <td className="py-4 text-sm text-slate-600 capitalize">{item.event || "transaction"}</td>
+                                        <td className="py-4 text-sm font-medium text-slate-800 hover:text-emerald-700"><Link href={`/admin/wallet/transaction/${item.reference}`}>{item.reference.slice(0, 27) || item.id}</Link></td>
+                                        <td className="py-4 text-sm text-slate-600 capitalize">{item.event ? "CREDIT" : "DEBIT"}</td>
                                         <td className="py-4 text-sm text-slate-600">
                                             {new Date(item.createdAt || item.updatedAt).toLocaleString("en-NG", {
                                                 year: "numeric",
@@ -430,19 +393,21 @@ function WalletPage() {
                                         </td>
                                         <td className="py-4 text-sm">{statusBadge(item.status)}</td>
                                         <td
-                                            className={`py-4 text-right text-sm font-semibold ${(item.event || "").toLowerCase() === "credit" ? "text-emerald-700" : "text-rose-700"
+                                            className={`py-4 text-right text-sm font-semibold ${(item.event || "").toLowerCase() === "nomba.payment.credit" ? "text-emerald-700" : "text-rose-700"
                                                 }`}
                                         >
                                             <span className="inline-flex items-center gap-1.5">
-                                                {(item.event || "").toLowerCase() === "credit" ? (
+                                                {(item.event || "").toLowerCase() === "nomba.payment.credit" ? (
                                                     <ArrowDownLeft className="h-4 w-4" />
                                                 ) : (
                                                     <ArrowUpRight className="h-4 w-4" />
                                                 )}
-                                                {(item.event || "").toLowerCase() === "credit" ? "+" : "-"}
+                                                {(item.event || "").toLowerCase() === "nomba.payment.credit" ? "+" : "-"}
                                                 {formatCurrency(Math.abs(Number(item.amount || 0)))}
                                             </span>
                                         </td>
+                                        <td className="py-4 px-2 text-sm text-slate-600 capitalize text-center">{item.channel}</td>
+                                        <td className="py-4 px-2 text-sm text-slate-600 capitalize text-center">{item.currency}</td>
                                     </tr>
                                 ))
                             )}

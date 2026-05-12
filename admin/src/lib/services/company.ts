@@ -23,7 +23,7 @@ export type Company = {
   location?: string;
   avatar?: string;
   center?: string;
-  category?: string;
+  category: string;
   role?: "COMPANY";
   createdAt?: Date;
   updatedAt?: Date;

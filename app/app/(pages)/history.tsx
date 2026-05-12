@@ -1,7 +1,10 @@
-import { Payment, useAuth } from "@/hooks/use-auth";
+import { formatCurrency } from "@/config";
+import { useAuth } from "@/hooks/use-auth";
+import { getTransactions } from "@/lib/services/transaction";
+import { Transaction } from "@/lib/types";
 import { RelativePathString, useRouter } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   RefreshControl,
   ScrollView,
@@ -11,51 +14,49 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { getTransactions } from "@/lib/services/transaction";
 
 export default function History() {
-  const { payments, currentUser } = useAuth();
-  const [paymentList, setPaymentList] = useState<Payment[]>([]);
+  const { currentUser, token } = useAuth();
+  const [transactionList, setTransactionList] = useState<Transaction[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [query, setQuery] = useState("");
   const router = useRouter();
 
-  const loadPayments = useCallback(async () => {
+  const loadTransactions = useCallback(async () => {
     setRefreshing(true);
     try {
-      const data = await getTransactions(currentUser?.uid);
-      setPaymentList(Array.isArray(data.transactions) ? data.transactions : []);
+      const data = await getTransactions(
+        currentUser?.uid as string,
+        token as string,
+        fromDate || undefined,
+        toDate || undefined,
+        query || undefined
+      );
+      const transactions = data.transactions
+        ? Array.isArray(data.transactions)
+          ? data.transactions
+          : [data.transactions]
+        : [];
+      setTransactionList(transactions as Transaction[]);
     } catch (error) {
-      setPaymentList([]);
+      setTransactionList([]);
     } finally {
       setRefreshing(false);
     }
-  }, [payments]);
+  }, [token, currentUser, fromDate, toDate, query]);
 
   useEffect(() => {
-    loadPayments();
-  }, [loadPayments]);
-
-  const filteredPayments = useMemo(() => {
-    if (!fromDate && !toDate) return paymentList;
-    const from = fromDate ? new Date(fromDate) : null;
-    const to = toDate ? new Date(toDate) : null;
-    return paymentList.filter((p) => {
-      const d = p.createdAt ? new Date(p.createdAt) : null;
-      if (!d) return false;
-      if (from && d < from) return false;
-      if (to && d > to) return false;
-      return true;
-    });
-  }, [paymentList, fromDate, toDate]);
+    loadTransactions();
+  }, [loadTransactions]);
 
   return (
     <ScrollView
       style={styles.safe}
       contentContainerStyle={styles.container}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={loadPayments} />
+        <RefreshControl refreshing={refreshing} onRefresh={loadTransactions} />
       }
     >
       <View style={styles.header}>
@@ -76,9 +77,11 @@ export default function History() {
 
       <View style={styles.searchWrap}>
         <TextInput
-          placeholder="Search payments..."
+          placeholder="Search by reference..."
           placeholderTextColor="#bfc7ca"
           style={styles.searchInput}
+          value={query}
+          onChangeText={setQuery}
         />
         <View style={styles.rangeRow}>
           <TextInput
@@ -100,43 +103,37 @@ export default function History() {
 
       <View style={styles.historyWrap}>
         {refreshing ? (
-          <Text style={styles.historyStateText}>
-            Refreshing transactions...
-          </Text>
-        ) : filteredPayments.length === 0 ? (
+          <Text style={styles.historyStateText}>Refreshing transactions...</Text>
+        ) : transactionList.length === 0 ? (
           <Text style={styles.historyStateText}>No transactions found.</Text>
         ) : (
-          filteredPayments.slice(0, 12).map((tx) => {
-            const title = tx.businessName || "Payment";
-            const subtitle = tx.frequency || tx.payment || "";
-            const date = tx.date ? new Date(tx.date).toLocaleDateString() : "-";
+          transactionList.slice(0, 12).map((tx) => {
+            const title = tx.metadata?.transactionType || tx.event || "Transaction";
+            const subtitle = tx.metadata?.narration || tx.metadata?.senderName || "";
+            const date = tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : "-";
             const rawStatus = tx.status || "";
             const status =
               rawStatus === "SUCCESS"
-                ? "Paid"
+                ? "SUCCESS"
                 : rawStatus === "PENDING"
-                ? "Pending"
+                ? "PENDING"
                 : rawStatus === "FAILED"
-                ? "Failed"
+                ? "FAILED"
                 : rawStatus;
-            const amount = tx.amount
-              ? `₦${Number(tx.amount).toLocaleString()}`
-              : "-";
+            const amount = tx.amount ? formatCurrency(Number(tx.amount)) : "-";
             const color =
-              status === "Paid"
+              status === "SUCCESS"
                 ? "#14a76a"
-                : status === "Pending"
+                : status === "PENDING"
                 ? "#2266ff"
                 : "#e94b4b";
 
             return (
               <TouchableOpacity
-                key={tx.reference}
+                key={tx.id}
                 style={styles.historyCard}
                 activeOpacity={0.9}
-                onPress={() =>
-                  router.push(`/receipt/${tx.reference}` as RelativePathString)
-                }
+                onPress={() => router.push(`/transaction/${tx.reference}` as RelativePathString)}
               >
                 <View style={{ flex: 1 }}>
                   <Text style={styles.historyTitle}>{title}</Text>
@@ -145,9 +142,7 @@ export default function History() {
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
                   <Text style={styles.historyAmount}>{amount}</Text>
-                  <View
-                    style={[styles.statusBadge, { backgroundColor: color }]}
-                  >
+                  <View style={[styles.statusBadge, { backgroundColor: color }]}> 
                     <Text style={styles.statusText}>{status}</Text>
                   </View>
                 </View>
