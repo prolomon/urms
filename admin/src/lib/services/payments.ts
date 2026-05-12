@@ -54,7 +54,7 @@ export type PaymentTransaction = {
     return data;
 }
 
-export async function getRecords(id: string, fromDate?: string, toDate?: string, query?: string): Promise<{ok: boolean;transactions?: PaymentTransaction[]; message?: string}> { 
+export async function getRecords(id: string, fromDate?: Date, toDate?: Date, query?: string): Promise<{ok: boolean;transactions?: PaymentTransaction[]; message?: string}> { 
     if (!id) {
         throw new Error("No user ID found");
     }
