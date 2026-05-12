@@ -25,6 +25,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { useParams } from "next/navigation";
 import { getWallet, Wallet as WalletType } from "@/lib/services/wallet";
+import Link from "next/link";
 
 export default function PartnerDetailsPage() {
     const { id } = useParams();
@@ -309,13 +310,13 @@ export default function PartnerDetailsPage() {
                         </>
                     ) : (
                         <>
-                            <button
-                                onClick={() => router.push(`/admin/partners/${partner?.uid || id as string}/agents`)}
+                            <Link
+                                href={`/admin/partners/${partner?.uid || id as string}/agents`}
                                 className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-600 shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50"
                             >
                                 <Users size={15} />
                                 <span>View Agents</span>
-                            </button>
+                            </Link>
                             <button
                                 onClick={() => setEditing(true)}
                                 className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-emerald-700"
@@ -549,9 +550,17 @@ export default function PartnerDetailsPage() {
                     {/* wallet card */}
                     {wallet && (
                         <div className="rounded-2xl bg-white p-5 ring-1 ring-slate-100 shadow-sm md:p-6">
-                            <h3 className="mb-4 text-lg font-semibold text-slate-900">
-                                Wallet Details
-                            </h3>
+                            <div className="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                <h3 className="text-lg font-semibold text-slate-900">
+                                    Wallet Details
+                                </h3>
+                                <Link
+                                    href={`/admin/partners/${partner?.uid || id}/finance`}
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-emerald-700"
+                                >
+                                    <span>View Finance</span>
+                                </Link>
+                            </div>
                             <div className="grid gap-4 md:grid-cols-2">
                                 <div>
                                     <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">

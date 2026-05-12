@@ -1,4 +1,5 @@
 import { API_URL, buildHeaders } from "../api";
+import { TransactionStatus } from "./wallet";
 
 export type Frequency = "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY" | "QUARTERLY";
 
@@ -18,6 +19,29 @@ export type Payment = {
   updatedAt?: Date;
 };
 
+export type PaymentTransaction = {
+  id: string;
+  reference: string;
+  userId: string;
+  pricingId: string;
+  companyId: string;
+  centerId: string
+  amount: string;
+  agentId?: string | null;
+  currency: string
+  paymentId: string;
+  date: Date;
+  type: string;
+  category: string
+  name: string;
+  billing: string;
+  status: TransactionStatus;
+  metadata: any | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+
  export async function getPayments(): Promise<{ok: boolean; payments?: Payment[]; message?: string}> { 
 
     const response = await fetch(`${API_URL}/payment/`, {
@@ -26,6 +50,34 @@ export type Payment = {
     const data = await response.json();
     if (!response.ok) {
         throw new Error(data.message || "Failed to fetch payments");
+    }
+    return data;
+}
+
+export async function getRecords(id: string, fromDate?: Date, toDate?: Date, query?: string): Promise<{ok: boolean;transactions?: PaymentTransaction[]; message?: string}> { 
+    if (!id) {
+        throw new Error("No user ID found");
+    }
+    const response = await fetch(`${API_URL}/payment-transaction/user/company/${id}?fromDate=${fromDate?.toISOString()}&toDate=${toDate?.toISOString()}&query=${query}`, {
+        headers: {...buildHeaders()},
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || "Failed to fetch payments");
+    }
+    return data;
+}
+
+export async function getRecord(id: string): Promise<{ok: boolean; transaction?: PaymentTransaction; message?: string}> { 
+    if (!id) {
+        throw new Error("No record ID found");
+    }
+    const response = await fetch(`${API_URL}/payment-transaction/reference/${id}`, {
+        headers: {...buildHeaders()},
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || "Failed to fetch payment");
     }
     return data;
 }

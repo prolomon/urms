@@ -63,6 +63,7 @@ const getPaymentTransactionsByUserId = async (req, res) => {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
     const skip = (page - 1) * limit;
+    const { fromDate, toDate, query } = req.query;
  
     if (!userId) {
       return res.status(400).json({ ok: false, message: 'User ID is required' });
@@ -70,13 +71,32 @@ const getPaymentTransactionsByUserId = async (req, res) => {
 
     // Build where clause based on type
     let where = {};
-    if (type === 'COMPANY') {
+    if (String(type).toLocaleLowerCase() === ('COMPANY').toLocaleLowerCase()) {
       where.companyId = userId;
-    } else if (type === 'CENTER') {
+    } else if (String(type).toLocaleLowerCase() === ('CENTER').toLocaleLowerCase()) {
       where.centerId = userId;
     } else {
       // Default to MEMBER or any other type
       where.userId = userId;
+    }
+
+    // Add date range filtering
+    if (fromDate || toDate) {
+      where.date = {};
+      if (fromDate) {
+        where.date.gte = new Date(fromDate);
+      }
+      if (toDate) {
+        where.date.lte = new Date(toDate);
+      }
+    }
+
+    // Add payment ID query filtering
+    if (query) {
+      where.paymentId = {
+        contains: query,
+        mode: 'insensitive',
+      };
     }
 
     const [transactions, total] = await Promise.all([
