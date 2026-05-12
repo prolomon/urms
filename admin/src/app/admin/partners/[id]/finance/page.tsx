@@ -35,8 +35,8 @@ function PartnerFinancePage() {
     const [query, setQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<string>("");
     const [typeFilter, setTypeFilter] = useState<string>("");
-    const [toDate, setToDate] = useState<Date>(() => new Date().toISOString().split("T")[0]);
-    const [fromDate, setFromDate] = useState<Date>(() => new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]);
+    const [toDate, setToDate] = useState(() => new Date().toISOString().split("T")[0]);
+    const [fromDate, setFromDate] = useState(() => new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]);
 
     const [toasts, setToasts] = useState<{ id: number; type: string; message: string }[]>([]);
 
@@ -91,7 +91,7 @@ function PartnerFinancePage() {
     const fetchRecords = useCallback(async () => {
         setLoadingRecords(true);
         try {
-            const res = await getRecords(partnerId, fromDate as Date, toDate as Date, query);
+            const res = await getRecords(partnerId, fromDate, toDate, query);
             setRecords(res.transactions || []);
         } catch (error) {
             console.error("Error fetching records:", error);
