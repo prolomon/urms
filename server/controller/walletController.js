@@ -13,6 +13,7 @@ import {
   getBanks,
   getTransactions
 } from "../service/wallet.js";
+import argon2 from "argon2";
 
 const validationErrorResponse = (res, error) => {
   const errors = error.details.map((detail) => detail.message);
@@ -75,6 +76,7 @@ const createWallet = async (req, res) => {
           status: acc?.data?.expired,
           accountName: acc?.data?.bankAccountName,
           currency: acc?.data?.currency,
+          accountHolderId: acc?.data?.accountHolderId,
         },
       });
 
@@ -132,15 +134,7 @@ const getWalletById = async (req, res) => {
 const getAllWallets = async (req, res) => {
   try {
     const wallets = await prisma.wallet.findMany({
-      orderBy: { createdAt: "desc" },
-      include: {
-        member: {
-          select: { uid: true, fullname: true, email: true },
-        },
-        admin: {
-          select: { uid: true, adminName: true, email: true },
-        },
-      },
+      orderBy: { createdAt: "desc" }
     });
 
     return res.status(200).json({ ok: true, wallets });
@@ -174,9 +168,95 @@ const initiateTransferController = async (req, res) => {
       return validationErrorResponse(res, error);
     }
 
-    const { amount, accountNumber, accountName, bankCode, merchantTxRef, senderName, narration } = value;
+    const { amount, accountNumber, accountName, bankCode, narration, pin, type, id } = value;
 
-    const result = await initiateTransfer(amount, accountNumber, accountName, bankCode, merchantTxRef, senderName, narration);
+    if (type === "ADMIN") {
+
+      const admin = await prisma.admin.findUnique({
+        where: { uid: req.userId },
+        select: { uid: true, secureToken: true },
+      });
+
+      if (!admin) {
+        return res.status(404).json({ ok: false, message: "Admin not found" });
+      }
+
+      if (!admin.secureToken) {
+        return res
+          .status(400)
+          .json({ ok: false, message: "Security token is not set" });
+      }
+
+      if (!pin) {
+        return res.status(400).json({ ok: false, message: "pin is required" });
+      }
+
+      const isValid = await argon2.verify(admin.secureToken, pin);
+
+      if (!isValid) {
+        return res.status(401).json({ ok: false, message: "Invalid security code" });
+      }
+    } else if (type === "AGENT") {
+
+      const agent = await prisma.agent.findUnique({
+        where: { uid: req.userId },
+        select: { uid: true, secureToken: true },
+      });
+
+      if (!agent) {
+        return res.status(404).json({ ok: false, message: "Agent not found" });
+      }
+
+      if (!agent.secureToken) {
+        return res
+          .status(400)
+          .json({ ok: false, message: "Security token is not set" });
+      }
+
+      if (!pin) {
+        return res.status(400).json({ ok: false, message: "pin is required" });
+      }
+
+      const isValid = await argon2.verify(agent.secureToken, pin);
+
+      if (!isValid) {
+        return res.status(401).json({ ok: false, message: "Invalid security code" });
+      }
+
+    } else if (type === "MEMBER") {
+
+      const member = await prisma.user.findUnique({
+        where: { uid: req.userId },
+        select: { uid: true, secureToken: true },
+      });
+
+      if (!member) {
+        return res.status(404).json({ ok: false, message: "Member not found" });
+      }
+
+      if (!member.secureToken) {
+        return res
+          .status(400)
+          .json({ ok: false, message: "Security token is not set" });
+      }
+
+      if (!pin) {
+        return res.status(400).json({ ok: false, message: "pin is required" });
+      }
+
+      const isValid = await argon2.verify(member.secureToken, pin);
+
+      if (!isValid) {
+        return res.status(401).json({ ok: false, message: "Invalid security code" });
+      }
+    }
+
+    const wallet = await prisma.wallet.findFirst({
+      where: { userId: id, role: type },
+    });
+
+    // Use authenticated user's UID as merchant transaction reference
+    const result = await initiateTransfer(amount, accountNumber, accountName, bankCode, id, wallet.accountName, narration)
 
     if (!result?.status) {
       return res.status(502).json({

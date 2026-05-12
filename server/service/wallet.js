@@ -118,7 +118,7 @@ export const createAccount = async (name, bvn, id) => {
             accountRef: id || nanoid(),
             accountName: name,
             bvn: bvn,
-            expiryDate: "2026-05-06 12:15:00",
+            expiryDate: "2026-07-06 12:15:00",
         };
 
         const token = await getManagedAccessToken();

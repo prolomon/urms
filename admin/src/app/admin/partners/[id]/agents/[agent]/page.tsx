@@ -62,10 +62,7 @@ export default function AgentDetailPage({ params }) {
   const loadAgentData = useCallback(async () => {
     setLoading(true);
     try {
-      console.log("Agent Id: ", id);
       const agentRes = await getAgent(id || "");
-
-      console.log("Agent Response:", agentRes);
 
       const foundAgent = agentRes?.agent || null;
 

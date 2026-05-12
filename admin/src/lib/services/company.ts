@@ -1,5 +1,17 @@
 import { API_URL, buildHeaders } from "../api";
 
+async function parseResponseBody(response: Response) {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  const text = await response.text();
+  return {
+    message: text || `HTTP ${response.status}: ${response.statusText}`,
+  };
+}
+
 export type Company = {
   id?: string;
   uid?: string;
@@ -11,7 +23,7 @@ export type Company = {
   location?: string;
   avatar?: string;
   center?: string;
-  secureToken?: string;
+  category: string;
   role?: "COMPANY";
   createdAt?: Date;
   updatedAt?: Date;
@@ -24,7 +36,7 @@ export async function getCompanies(uid: string): Promise<{ ok: boolean; data?: C
   const response = await fetch(`${API_URL}/company/center/${uid}`, {
     headers: {...buildHeaders(false)},
   });
-  const data = await response.json();
+  const data = await parseResponseBody(response);
   if (!response.ok) {
     throw new Error(data.message || "Failed to fetch companies");
   }
@@ -38,7 +50,7 @@ export async function getCompany(uid: string): Promise<{ ok: boolean; company?: 
   const response = await fetch(`${API_URL}/company/${uid}`, {
     headers: {...buildHeaders(false)},
   });
-  const data = await response.json();
+  const data = await parseResponseBody(response);
   if (!response.ok) {
     throw new Error(data.message || "Failed to fetch companies");
   }
@@ -49,7 +61,7 @@ export type CreateCompanyPayload = Omit<Company, "id" | "uid" | "avatar"> & {
   avatar?: string | File;
 };
 
-export async function createCompany(payload: CreateCompanyPayload): Promise<{ ok: boolean; company?: Company; message?: string }> {
+export async function createCompany(payload: CreateCompanyPayload, bank: { bankName: string; accountNumber: string; bankCode: string; accountName: string }): Promise<{ ok: boolean; company?: Company; message?: string }> {
   const avatarValue = payload?.avatar;
   const hasAvatarFile = typeof File !== "undefined" && (avatarValue as any) instanceof File;
 
@@ -71,9 +83,13 @@ export async function createCompany(payload: CreateCompanyPayload): Promise<{ ok
             formData.append(key, String(value));
           });
 
+          if (bank) {
+            formData.append("data", JSON.stringify(bank));
+          }
+
           return formData;
         })()
-      : JSON.stringify(payload),
+      : JSON.stringify({ ...payload, data: bank }),
   });
   const data = await response.json();
   if (!response.ok) {
@@ -147,50 +163,6 @@ export async function changePassword(id: string, currentPassword: string, newPas
   return data;
 }
 
-export async function changeSecurityToken(id: string, oldSecurityToken: string, newSecurityToken: string, confirmSecurityToken: string): Promise<{ ok: boolean; message?: string; error?: string }> {
-  const response = await fetch(`${API_URL}/company/${id}/change-security-token`, {
-    method: "PUT",
-    headers: {...buildHeaders(true)},
-    body: JSON.stringify({ oldSecurityToken, newSecurityToken, confirmSecurityToken })
-  });
-  const data = await response.json();
-  if(!response.ok) {
-    throw new Error(data.message || "Failed to change security Token");
-  }
-  return data;
-} 
-
-export async function createSecurityToken(id: string, securityToken: string, confirmSecurityToken: string): Promise<{ ok: boolean; message?: string; error?: string }> {
-  const response = await fetch(`${API_URL}/company/${id}/security-token`, {
-    method: "POST",
-    headers: {...buildHeaders(true)},
-    body: JSON.stringify({ securityToken, confirmSecurityToken })
-  });
-  const data = await response.json();
-  if(!response.ok) {
-    throw new Error(data.message || "Failed to change security Token");
-  }
-  return data;
-}
-
-export async function verifySecurityCode(id: string, secureToken: string, ) {
-  if (!secureToken) {
-    throw new Error("No authentication token found");
-  }
-
-  const response = await fetch(`${API_URL}/company/${id}/verify-security-code`, {
-    method: "POST",
-    headers: {...buildHeaders(true)},
-    body: JSON.stringify({ secureCode: secureToken }),
-  });
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.message || "Failed to verify security code");
-  }
-
-  return data;
-}
-
 export async function forgetPassword(id: string): Promise<{ ok: boolean; message?: string; error?: string }> {
   const response = await fetch(`${API_URL}/company/${id}/forget-password`, {
     method: "PUT",
@@ -199,18 +171,6 @@ export async function forgetPassword(id: string): Promise<{ ok: boolean; message
   const data = await response.json();
   if(!response.ok) {
     throw new Error(data.message || "Failed to change password");
-  }
-  return data;
-}
-
-export async function forgetSecureCode(id: string): Promise<{ ok: boolean; message?: string; error?: string }> {
-  const response = await fetch(`${API_URL}/company/${id}/forget-secure-token`, {
-    method: "PUT",
-    headers: {...buildHeaders(true)},
-  });
-  const data = await response.json();
-  if(!response.ok) {
-    throw new Error(data.message || "Failed to change secure code");
   }
   return data;
 }

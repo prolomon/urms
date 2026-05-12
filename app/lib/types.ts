@@ -28,7 +28,7 @@ export type Agent = {
   role?: "AGENT";
   createdAt?: Date;
   updatedAt?: Date;
-}
+};
 
 export type User = {
   id?: string;
@@ -50,7 +50,7 @@ export type User = {
   role?: "AGENT";
   createdAt?: Date;
   updatedAt?: Date;
-}
+};
 
 export type Notification = {
   title: string;
@@ -76,8 +76,8 @@ export type Payment = {
   status: "PENDING" | "SUCCESS" | "FAILED" | "CANCELLED" | "REFUNDED";
   due: Date | null;
   isVerified: boolean;
-  sessions:     string[];
-  debt: number;      
+  sessions: string[];
+  debt: number;
   createdAt?: Date;
   updatedAt?: Date;
 };
@@ -176,15 +176,6 @@ export type Pricing = {
   updatedAt?: string;
 };
 
-
-enum TransactionStatus {
-  PENDING,
-  SUCCESS,
-  FAILED,
-  REFUNDED,
-  CANCELLED,
-}
-
 export type Wallet = {
   id: string;
   userId?: string;
@@ -204,41 +195,49 @@ export type Wallet = {
   verify?: boolean;
 };
 
+export type TransactionStatus =
+  | "PENDING"
+  | "SUCCESS"
+  | "FAILED"
+  | "REFUNDED"
+  | "CANCELLED";
+
 export type Transaction = {
   id: string;
-  status: string;
-  amount: string;
-  fixedCharge: string;
-  source: string;
-  type: string;
-  customerBillerId: string;
-  timeCreated: string;
-  timeUpdated: string;
-  posTid: string;
-  posSerialNumber: string;
-  walletCurrency: string;
-  walletBalance: string;
-  billingVendorReference: string;
-  paymentVendorReference: string;
-  userId: string;
-  ktaSenderName: string;
-  ktaSenderAccountNumber: string;
-  ktaSenderBankCode: string;
-  recipientAccountNumber: string;
-  recipientAccountType: string;
-  senderName: string;
+  reference: string;
+  event: string;
+  status: TransactionStatus;
+  amount: number;
   currency: string;
-  bankCode: string;
-  productId: string;
-  isAgentTransaction: true;
-  isInternational: boolean;
-  customerCommission: string;
-  recipientAccountName: string;
-  sessionId: string;
-  accountNumber: string;
-  bankName: string;
-  entryType: string;
-  transactionCategory: string;
-  narration: string;
-  receiptTerminalId: string;
+  channel: string | null;
+  gatewayResponse: string | null;
+  customerEmail: string | null;
+  paymentReference: string | null;
+  userId: string | null;
+  metadata: any | null;
+  rawPayload: any | null;
+  createdAt: Date;
+  updatedAt: Date;
+  payment: string;
 };
+
+export type PaymentTransaction = {
+  id: string;
+  reference: string;
+  userId: string;
+  pricingId: string;
+  companyId: string;
+  centerId: string
+  amount: string;
+  currency: string
+  paymentId: string;
+  date: Date;
+  type: string;
+  category: string
+  name: string;
+  billing: string;
+  status: TransactionStatus;
+  metadata: any | null;
+  createdAt: Date;
+  updatedAt: Date;
+}

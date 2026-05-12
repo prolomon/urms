@@ -36,19 +36,23 @@ const initiateTransferSchema = Joi.object({
     "string.base": "bankCode must be a string",
     "any.required": "bankCode is required",
   }),
-  merchantTxRef: Joi.string().trim().required().messages({
-    "string.base": "merchantTxRef must be a string",
-    "any.required": "merchantTxRef is required",
-  }),
-  senderName: Joi.string().trim().min(2).max(150).required().messages({
-    "string.base": "senderName must be a string",
-    "string.min": "senderName must be at least 2 characters",
-    "string.max": "senderName must be at most 150 characters",
-    "any.required": "senderName is required",
+  id: Joi.string().trim().required().messages({
+    "string.base": "id must be a string",
+    "any.required": "id is required",
   }),
   narration: Joi.string().trim().max(255).optional().messages({
     "string.base": "narration must be a string",
     "string.max": "narration must be at most 255 characters",
+  }),
+  pin: Joi.string().trim().pattern(/^\d{6}$/).required().messages({
+    "string.base": "pin must be a string",
+    "string.pattern.base": "pin must be 6 digits",
+    "any.required": "pin is required",
+  }),
+  type: Joi.string().trim().valid("ADMIN", "AGENT", "MEMBER").required().messages({ 
+    "string.base": "type must be a string",
+    "any.only": "type must be 'ADMIN', 'AGENT', or 'MEMBER'",
+    "any.required": "type is required",
   }),
 });
 

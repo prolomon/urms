@@ -83,7 +83,7 @@ export default function AddEntityPage() {
                 ]);
 
                 const companyList = Array.isArray(companiesRes?.data) ? companiesRes.data : [];
-                setCompanies(companyList);
+                setCompanies(companyList.filter((c) => c.category.toLocaleLowerCase() === formData.category.toLocaleLowerCase()));
                 setSelectedCompany(null);
                 setPricingOptions(
                     Array.isArray(pricingRes?.data) ? pricingRes.data : []
@@ -99,7 +99,7 @@ export default function AddEntityPage() {
         if (centerId) {
             loadData();
         }
-    }, [centerId]);
+    }, [centerId, formData.category]);
 
     const handleInputChange = (
         field: keyof Omit<Member, "location">,
@@ -188,7 +188,7 @@ export default function AddEntityPage() {
 
     const handlePricingToggle = (pricingId: string) => {
         setFormData((prev) => {
-            const currentPricing = prev.pricing || [];
+            const currentPricing = Array.from(new Set(prev.pricing || []));
             const isSelected = currentPricing.includes(pricingId);
             return {
                 ...prev,
@@ -198,6 +198,7 @@ export default function AddEntityPage() {
             };
         });
     };
+
 
     const validateForm = (): boolean => {
         if (!formData.fullname?.trim()) {
@@ -251,6 +252,7 @@ export default function AddEntityPage() {
 
             const payload = {
                 ...formData,
+                pricing: Array.from(new Set(formData.pricing || [])),
                 center: centerId,
                 location: finalLocation,
                 company: selectedCompany?.uid || "",
@@ -276,8 +278,17 @@ export default function AddEntityPage() {
     };
 
     const getFilteredPricing = () => {
-        return pricingOptions.filter((p) => p.category === formData.category);
+        const filteredPricing = pricingOptions.filter((p) => p.category.toLowerCase() === formData.category.toLowerCase());
+        const uniquePricing = new Map(
+            filteredPricing
+                .filter((pricing) => pricing?.id)
+                .map((pricing) => [pricing.id as string, pricing]),
+        );
+
+        return Array.from(uniquePricing.values());
     };
+
+    console.log(pricingOptions, formData.category, getFilteredPricing());
 
     if (loading) {
         return (

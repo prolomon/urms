@@ -15,6 +15,10 @@ const createCompanySchema = Joi.object({
     "string.max": "Phone must be at most 20 characters long",
     "any.required": "Phone is required",
   }),
+  category: Joi.string().trim().required().messages({
+    "string.base": "Category must be a string",
+    "any.required": "Category is required",
+  }),
   email: Joi.string().email().required().messages({
     "string.email": "Email must be a valid email address",
     "any.required": "Email is required",
@@ -35,15 +39,12 @@ const createCompanySchema = Joi.object({
   role: Joi.string().trim().optional().default("COMPANY").messages({
     "string.base": "Role must be a string",
   }),
-  secureToken: Joi.string().trim().optional().messages({
-    "string.base": "Secure token must be a string",
-  }),
-  accountCode: Joi.string().trim().optional().messages({
-    "string.base": "Account code must be a string",
-  }),
   location: locationSchema.optional().messages({
     "alternatives.match": "Location must be a valid object or string",
   }),
+  data: Joi.object().optional().allow(null).messages({
+    "object.base": "Data must be an object",
+  }), 
 });
 
 const updateCompanySchema = Joi.object({
@@ -131,68 +132,10 @@ const loginCompanySchema = Joi.object({
 
 const alphaNumPattern = /^[A-Za-z0-9]+$/;
 
-const createSecurityTokenSchema = Joi.object({
-  securityToken: Joi.string()
-    .pattern(alphaNumPattern)
-    .min(8)
-    .max(100)
-    .required()
-    .messages({
-      'string.pattern.base': 'Security token must contain only letters and numbers',
-      'string.min': 'Security token must be at least 8 characters long',
-      'string.max': 'Security token must be at most 100 characters long',
-      'string.empty': 'Security token is required',
-      'any.required': 'Security token is required',
-    }),
-  confirmSecurityToken: Joi.string()
-    .valid(Joi.ref('securityToken'))
-    .required()
-    .messages({
-      'any.only': 'Confirm security token must match security token',
-      'any.required': 'Confirm security token is required',
-    }),
-});
-
-const changeSecurityTokenSchema = Joi.object({
-  oldSecurityToken: Joi.string().pattern(alphaNumPattern).required().messages({
-    'string.pattern.base': 'Old security token must contain only letters and numbers',
-    'string.empty': 'Old security token is required',
-    'any.required': 'Old security token is required',
-  }),
-  newSecurityToken: Joi.string()
-    .pattern(alphaNumPattern)
-    .min(8)
-    .max(100)
-    .required()
-    .messages({
-      'string.pattern.base': 'New security token must contain only letters and numbers',
-      'string.min': 'New security token must be at least 8 characters long',
-      'string.max': 'New security token must be at most 100 characters long',
-      'string.empty': 'New security token is required',
-      'any.required': 'New security token is required',
-    }),
-  confirmSecurityToken: Joi.string()
-    .valid(Joi.ref('newSecurityToken'))
-    .required()
-    .messages({
-      'any.only': 'Confirm security token must match new security token',
-      'any.required': 'Confirm security token is required',
-    }),
-});
-
-const verifySecurityCodeSchema = Joi.object({
-  secureCode: Joi.string().required().messages({
-    'any.required': 'Security code is required',
-  }),
-});
-
 export {
   createCompanySchema,
   updateCompanySchema,
   resetPasswordSchema,
   changePasswordSchema,
   loginCompanySchema,
-  createSecurityTokenSchema,
-  changeSecurityTokenSchema,
-  verifySecurityCodeSchema,
 };

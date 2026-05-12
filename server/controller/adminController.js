@@ -91,10 +91,9 @@ const createAdmin = async (req, res) => {
         password: hashedPassword,
         avatar: value.avatar,
         paymentConfig: {
-          main: 40,
-          agent: 20,
-          technology: 15,
-          operation: 25,
+          main: 65,
+          agent: 25,
+          technology: 10,
         },
         uid: genUid || `URMSAD-${generateAdminUidSuffix()}`,
         location: {
@@ -190,8 +189,6 @@ const getAllAdmins = async (req, res) => {
           adminEmail: true,
           adminLocation: true,
           adminPhone: true,
-          paystackCustomerId: true,
-          paystackCustomerCode: true,
         },
       }),
       prisma.admin.count(),
@@ -239,8 +236,7 @@ const getAdmin = async (req, res) => {
         adminEmail: true,
         adminLocation: true,
         adminPhone: true,
-        paystackCustomerId: true,
-        paystackCustomerCode: true,
+        ledger: true
       },
     });
     if (!admin)
@@ -278,8 +274,7 @@ const getAdminById = async (req, res) => {
         adminEmail: true,
         adminLocation: true,
         adminPhone: true,
-        paystackCustomerId: true,
-        paystackCustomerCode: true,
+        ledger: true
       },
     });
     if (!admin)
@@ -340,8 +335,7 @@ const updateAdmin = async (req, res) => {
         adminEmail: true,
         adminLocation: true,
         adminPhone: true,
-        paystackCustomerId: true,
-        paystackCustomerCode: true,
+        ledger: true
       },
     });
 
@@ -407,8 +401,11 @@ const loginAdmin = async (req, res) => {
     await verifyProtocol();
 
     const { email, password } = value;
-    const ip =
-      req.ip || req.headers["x-forwarded-for"] || req.connection.remoteAddress;
+    const ip = req.headers['cf-connecting-ip'] ||
+    req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+    req.headers['x-real-ip'] ||
+    req.connection.remoteAddress ||
+    req.socket.remoteAddress 
 
     // Find admin by email
     const admin = await prisma.admin.findUnique({
@@ -435,8 +432,7 @@ const loginAdmin = async (req, res) => {
         adminEmail: true,
         adminLocation: true,
         adminPhone: true,
-        paystackCustomerId: true,
-        paystackCustomerCode: true,
+        ledger: true
       },
     });
 

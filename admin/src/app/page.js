@@ -23,7 +23,7 @@ export default function LandingPage() {
               <Image src="/icon.png" alt="Karu Revenue Logo" width={34} height={34} />
             </div>
             <div>
-              <p className="text-sm font-bold leading-tight text-slate-900">Karu Revenue</p>
+              <p className="text-sm font-bold leading-tight text-slate-900">Amac Revenue</p>
               <p className="text-xs text-slate-500">Management System</p>
             </div>
           </a>
@@ -65,7 +65,7 @@ export default function LandingPage() {
           <div className="relative mx-auto grid w-full max-w-7xl gap-10 px-4 py-14 md:grid-cols-2 md:items-center md:px-6 md:py-20">
             <div>
               <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
-                Karu Revenue Management
+                Amac Revenue Management
               </span>
               <h1 className="mt-4 text-3xl font-bold leading-tight text-slate-900 md:text-5xl">
                 Collect, monitor, and grow revenue from one connected dashboard.
@@ -198,7 +198,7 @@ export default function LandingPage() {
         <section id="contact" className="mx-auto w-full max-w-7xl px-4 pb-14 md:px-6 md:pb-20">
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
             <p className="text-xs uppercase tracking-wide text-slate-500">Need help?</p>
-            <h2 className="mt-1 text-2xl font-bold text-slate-900 md:text-3xl">Talk to the Karu Revenue team</h2>
+            <h2 className="mt-1 text-2xl font-bold text-slate-900 md:text-3xl">Talk to the Amac Revenue team</h2>
             <p className="mt-3 text-sm text-slate-600 md:text-base">Send inquiries on onboarding, operations, and system access.</p>
             <div className="mt-5 flex flex-wrap gap-3">
               <a href="mailto:support@afriverge.com" className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100">
@@ -216,7 +216,7 @@ export default function LandingPage() {
         <div className="mx-auto w-full max-w-7xl px-4 py-12 md:px-6 md:py-14">
           <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <p className="text-lg font-bold text-slate-900">Karu Revenue Management</p>
+              <p className="text-lg font-bold text-slate-900">Amac Revenue Management</p>
               <p className="mt-3 max-w-sm text-sm leading-relaxed text-slate-600">
                 A connected platform for modern field operations, wallet oversight, and revenue assurance.
               </p>

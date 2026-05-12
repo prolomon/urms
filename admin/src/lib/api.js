@@ -16,6 +16,18 @@ export function buildHeaders(hasJson = true) {
   return headers;
 }
 
+async function parseResponseBody(response) {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  const text = await response.text();
+  return {
+    message: text || `HTTP ${response.status}: ${response.statusText}`,
+  };
+}
+
 export async function login(email, password) {
   const response = await fetch(`${API_URL}/admin/login`, {
     method: "POST",
@@ -95,7 +107,7 @@ export async function getPayment(id) {
   const response = await fetch(`${API_URL}/payment/reference/${id}`, {
     headers: buildHeaders(false),
   });
-  const data = await response.json();
+  const data = await parseResponseBody(response);
   if (!response.ok) {
     throw new Error(data.message || "Failed to fetch payments");
   }
@@ -106,7 +118,7 @@ export async function getPayments(userId) {
   const response = await fetch(`${API_URL}/payment/user/${userId}`, {
     headers: buildHeaders(false),
   });
-  const data = await response.json();
+  const data = await parseResponseBody(response);
   if (!response.ok) {
     throw new Error(data.message || "Failed to fetch payments");
   }
@@ -117,7 +129,7 @@ export async function getAllPayments() {
   const response = await fetch(`${API_URL}/payment`, {
     headers: buildHeaders(),
   });
-  const data = await response.json();
+  const data = await parseResponseBody(response);
   if (!response.ok) {
     throw new Error(data.message || "Failed to fetch payments");
   }

@@ -131,23 +131,6 @@ export default function LoginScreen() {
               >
                 <Text style={styles.primaryButtonText}>{loading ? "Signing In..." : "Sign In"}</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.registerWrap}
-                activeOpacity={0.7}
-                onPress={() => router.push("/preference")}
-              >
-                <Text style={styles.registerText}>
-                  Don&apos;t have an account? Register
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Footer */}
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>
-                © 2026 Karu Revenue Management System
-              </Text>
             </View>
           </View>
         </ScrollView>
@@ -170,7 +153,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     paddingHorizontal: 10,
-    paddingVertical: 40,
+    paddingVertical: 10,
     paddingTop: 60,
   },
   header: {
@@ -282,6 +265,6 @@ const styles = StyleSheet.create({
     right: 24,
     gap: 12,
   },
-  footerText: { color: "#64748b", fontSize: 14, opacity: 0.8 },
+  footerText: { color: "#64748b", fontSize: 16, opacity: 0.8 },
   backLink: { fontSize: 18, textDecorationLine: "underline", opacity: 1 },
 });

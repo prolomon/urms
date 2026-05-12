@@ -138,14 +138,10 @@ const loginSchema = Joi.object({
 });
 
 const createSecurityTokenSchema = Joi.object({
-  securityToken: Joi.string()
-    .pattern(alphaNumPattern)
-    .min(8)
-    .max(100)
+  securityToken: Joi.string().min(6)
+    .max(8)
     .required()
     .messages({
-      "string.pattern.base":
-        "Security token must contain only letters and numbers",
       "string.min": "Security token must be at least 8 characters long",
       "string.max": "Security token must be at most 100 characters long",
       "string.empty": "Security token is required",
@@ -190,7 +186,7 @@ const changeSecurityTokenSchema = Joi.object({
 });
 
 const verifySecurityCodeSchema = Joi.object({
-  securityCode: Joi.string().pattern(alphaNumPattern).required().messages({
+  securityCode: Joi.string().required().messages({
     "string.pattern.base":
       "Security code must contain only letters and numbers",
     "string.empty": "Security code is required",

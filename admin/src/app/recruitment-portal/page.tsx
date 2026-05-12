@@ -389,7 +389,7 @@ export default function RecruitmentPortalPage() {
                             Welcome onboard
                         </h2>
                         <p className="mt-3 text-sm leading-6 text-slate-600">
-                            You have successfully signed up for the Karu Revenue Management System (KRMS).
+                            You have successfully signed up for the Amac Revenue Management System (ARMS).
                         </p>
 
                         <div className="mt-6 flex justify-end">

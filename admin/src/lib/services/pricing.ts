@@ -1,5 +1,17 @@
 import { API_URL, buildHeaders, getTokenFromCookie } from "../api";
 
+async function parseResponseBody(response: Response) {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  const text = await response.text();
+  return {
+    message: text || `HTTP ${response.status}: ${response.statusText}`,
+  };
+}
+
 export type Pricing = {
   status?: boolean;
   id?: string;
@@ -49,7 +61,7 @@ export async function getPricing(center: string, page: number, limit: number, se
     method: "GET",
     headers: { ...buildHeaders() },
   });
-  const data = await response.json();
+  const data = await parseResponseBody(response);
   if (!response.ok) {
     throw new Error(data.message || "Failed to fetch pricing");
   }
@@ -66,7 +78,7 @@ export async function getPricingByCenter(id: string): Promise<{ ok: boolean; dat
     method: "GET",
     headers: { ...buildHeaders() },
   });
-  const data = await response.json();
+  const data = await parseResponseBody(response);
   if (!response.ok) {
     throw new Error(data.message || "Failed to fetch pricing");
   }

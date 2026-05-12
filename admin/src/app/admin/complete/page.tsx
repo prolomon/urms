@@ -5,7 +5,7 @@ import { useWallet } from "@/context/WalletContext";
 import { Lock, ShieldCheck, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createSecurityToken } from "@/lib/services/company";
+import { createSecurityToken } from "@/lib/services/admin";
 
 export default function CompleteProfileScreen() {
   const router = useRouter();
@@ -55,7 +55,7 @@ export default function CompleteProfileScreen() {
   }, [wallet]);
 
   const handleValidateWallet = () => {
-    if (wallet || isExist) {
+    if (wallet) {
       setStep(3);
     } else {
       setStep(2);

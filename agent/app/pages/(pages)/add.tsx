@@ -44,7 +44,7 @@ export default function RegisterScreen() {
     businessName: "",
     location: {
       state: "FCT",
-      city: "Karu",
+      city: "Abuja",
       address: "",
       zipcode: "000000",
       nearestBusStop: ""

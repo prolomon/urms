@@ -11,20 +11,26 @@ import {
 	ScrollView,
 	StyleSheet,
 	Text,
+	TextInput,
 	TouchableOpacity,
 	View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-type DateFilter = "ALL" | "TODAY" | "LAST_7_DAYS" | "THIS_MONTH";
-
 export default function HistoryScreen() {
 	const router = useRouter();
 	const { currentUser } = useAuth();
+	const { wallet, getTransactions, refresh } = useWallet();
 	const [loading, setLoading] = useState(true);
 	const [refreshing, setRefreshing] = useState(false);
 	const [items, setItems] = useState<Transaction[]>([]);
-	const [dateFilter, setDateFilter] = useState<DateFilter>("ALL");
+	const [fromDate, setFromDate] = useState(
+		new Date(new Date().getTime() - 7 * 24 * 60 * 60 * 1000)
+			.toISOString()
+			.split("T")[0],
+	);
+
+	const [toDate, setToDate] = useState(new Date().toISOString().split("T")[0]);
 
 	// const loadPayments = useCallback(async () => {
 	// 	try {
@@ -66,36 +72,7 @@ export default function HistoryScreen() {
 		return "#475569";
 	};
 
-	const filteredItems = useMemo(() => {
-		const now = new Date();
-		const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-		if (dateFilter === "ALL") {
-			return items;
-		}
-
-		if (dateFilter === "TODAY") {
-			return items.filter((tx) => {
-				const created = new Date(tx.createdAt);
-				return created >= startOfToday;
-			});
-		}
-
-		if (dateFilter === "LAST_7_DAYS") {
-			const sevenDaysAgo = new Date(startOfToday);
-			sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-			return items.filter((tx) => {
-				const created = new Date(tx.createdAt);
-				return created >= sevenDaysAgo;
-			});
-		}
-
-		const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-		return items.filter((tx) => {
-			const created = new Date(tx.createdAt);
-			return created >= startOfMonth;
-		});
-	}, [dateFilter, items]);
+	const filteredItems = useMemo(() => items, [items]);
 
 	return (
 		<SafeAreaView style={styles.safe}>
@@ -138,51 +115,28 @@ export default function HistoryScreen() {
 					</View>
 				) : (
 					<>
-						<View style={styles.filterWrap}>
-							<TouchableOpacity
-								style={[styles.filterChip, dateFilter === "ALL" && styles.filterChipActive]}
-								onPress={() => setDateFilter("ALL")}
-							>
-								<Text style={[styles.filterChipText, dateFilter === "ALL" && styles.filterChipTextActive]}>All</Text>
-							</TouchableOpacity>
-							<TouchableOpacity
-								style={[styles.filterChip, dateFilter === "TODAY" && styles.filterChipActive]}
-								onPress={() => setDateFilter("TODAY")}
-							>
-								<Text style={[styles.filterChipText, dateFilter === "TODAY" && styles.filterChipTextActive]}>Today</Text>
-							</TouchableOpacity>
-							<TouchableOpacity
-								style={[
-									styles.filterChip,
-									dateFilter === "LAST_7_DAYS" && styles.filterChipActive,
-								]}
-								onPress={() => setDateFilter("LAST_7_DAYS")}
-							>
-								<Text
-									style={[
-										styles.filterChipText,
-										dateFilter === "LAST_7_DAYS" && styles.filterChipTextActive,
-									]}
+						<View style={{ marginBottom: 12 }}>
+							<Text style={{ fontSize: 13, color: "#334155", marginBottom: 6 }}>Filter by date (YYYY-MM-DD)</Text>
+							<View style={{ flexDirection: "row", alignItems: "center" }}>
+								<TextInput
+									placeholder="From"
+									value={fromDate}
+									onChangeText={setFromDate}
+									style={styles.dateInput}
+								/>
+								<TextInput
+									placeholder="To"
+									value={toDate}
+									onChangeText={setToDate}
+									style={[styles.dateInput, { marginLeft: 8 }]}
+								/>
+								<TouchableOpacity
+									style={[styles.primaryBtn, { marginLeft: 8, paddingHorizontal: 12 }]}
+									onPress={() => loadPayments(fromDate, toDate)}
 								>
-									Last 7 Days
-								</Text>
-							</TouchableOpacity>
-							<TouchableOpacity
-								style={[
-									styles.filterChip,
-									dateFilter === "THIS_MONTH" && styles.filterChipActive,
-								]}
-								onPress={() => setDateFilter("THIS_MONTH")}
-							>
-								<Text
-									style={[
-										styles.filterChipText,
-										dateFilter === "THIS_MONTH" && styles.filterChipTextActive,
-									]}
-								>
-									This Month
-								</Text>
-							</TouchableOpacity>
+									<Text style={styles.primaryBtnText}>Apply</Text>
+								</TouchableOpacity>
+							</View>
 						</View>
 						<View style={styles.listWrap}>
 							{filteredItems.length === 0 ? (
@@ -198,10 +152,10 @@ export default function HistoryScreen() {
 										}
 									>
 										<View style={{ flex: 1, paddingRight: 10 }}>
-											<Text style={styles.itemTitle}>{tx.event || "Transaction"}</Text>
-											<Text style={styles.itemSub}>{tx.reference}</Text>
+											<Text style={styles.itemTitle}>{tx.narration || tx.transactionCategory || "Transaction"}</Text>
+											<Text style={styles.itemSub}>{tx.paymentVendorReference || tx.billingVendorReference || tx.recipientAccountName || ""}</Text>
 											<Text style={styles.itemDate}>
-												{tx.createdAt ? new Date(tx.createdAt).toLocaleString() : "-"}
+												{(tx.timeCreated || tx.timeUpdated) ? new Date(tx.timeCreated || tx.timeUpdated).toLocaleString() : "-"}
 											</Text>
 										</View>
 										<View style={{ alignItems: "flex-end" }}>
@@ -268,6 +222,15 @@ const styles = StyleSheet.create({
 		flexWrap: "wrap",
 		gap: 8,
 		marginBottom: 12,
+	},
+	dateInput: {
+		flex: 1,
+		backgroundColor: "#fff",
+		borderWidth: 1,
+		borderColor: "#e5e7eb",
+		paddingHorizontal: 10,
+		paddingVertical: 8,
+		borderRadius: 8,
 	},
 	filterChip: {
 		paddingHorizontal: 12,

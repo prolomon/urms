@@ -24,6 +24,8 @@ import {
 } from "@/lib/services/company";
 import { useAuth } from "@/context/AuthContext";
 import { useParams } from "next/navigation";
+import { getWallet, Wallet as WalletType } from "@/lib/services/wallet";
+import Link from "next/link";
 
 export default function PartnerDetailsPage() {
     const { id } = useParams();
@@ -39,6 +41,7 @@ export default function PartnerDetailsPage() {
         email: "",
         phone: "",
         location: "",
+        category: "HOSPITALITY & ACCOMMODATION"
     });
     const [saving, setSaving] = useState(false);
     const [toasts, setToasts] = useState<
@@ -46,6 +49,7 @@ export default function PartnerDetailsPage() {
     >([]);
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const [wallet, setWallet] = useState<WalletType | null>(null);
 
     const addToast = (type: "success" | "error", message: string, ttl = 4000) => {
         const id = Date.now() + Math.random();
@@ -68,6 +72,7 @@ export default function PartnerDetailsPage() {
                     email: data?.email || "",
                     phone: data?.phone || "",
                     location: data?.location || "",
+                    category: data?.category || "HOSPITALITY & ACCOMMODATION"
                 });
 
                 addToast("success", "Partner loaded");
@@ -85,6 +90,29 @@ export default function PartnerDetailsPage() {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+    
+    const fetchWalletData = useCallback(async () => {
+        try {
+          if (!partner?.uid) {
+            setWallet(null);
+            return;
+          }
+          const walletData = await getWallet(partner?.uid, "COMPANY");
+    
+          if (walletData?.ok) {
+            setWallet(walletData?.wallet);
+          } else {
+            setWallet(null)
+          }
+        } catch (error: any) {
+          console.log(error)
+          addToast("error", error?.message || error?.error || "Failed to fetch wallet data");
+        }
+      }, [partner?.uid]);
+    
+      useEffect(() => {
+        fetchWalletData();
+      }, [fetchWalletData])
 
     const handleChange = (k: string, v: string | boolean) => {
         setForm((s) => ({
@@ -154,7 +182,8 @@ export default function PartnerDetailsPage() {
                 name: data?.name || "",
                 email: data?.email || "",
                 phone: data?.phone || "",
-                location: data?.location || ""
+                location: data?.location || "",
+                category: data?.category || "HOSPITALITY & ACCOMMODATION"
             });
             addToast("success", "Partner loaded");
         } catch (e) {
@@ -170,7 +199,8 @@ export default function PartnerDetailsPage() {
             name: partner?.name || "",
             email: partner?.email || "",
             phone: partner?.phone || "",
-            location: partner?.location || ""
+            location: partner?.location || "",
+            category: partner?.category || "HOSPITALITY & ACCOMMODATION"
         });
         setAvatarFileName("");
         setEditing(false);
@@ -280,13 +310,13 @@ export default function PartnerDetailsPage() {
                         </>
                     ) : (
                         <>
-                            <button
-                                onClick={() => router.push(`/admin/partners/${partner?.uid || id as string}/agents`)}
+                            <Link
+                                href={`/admin/partners/${partner?.uid || id as string}/agents`}
                                 className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-600 shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50"
                             >
                                 <Users size={15} />
                                 <span>View Agents</span>
-                            </button>
+                            </Link>
                             <button
                                 onClick={() => setEditing(true)}
                                 className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-emerald-700"
@@ -315,6 +345,7 @@ export default function PartnerDetailsPage() {
                 </div>
             ) : partner ? (
                 <div className="space-y-4">
+                    {/* head card  */}
                     <div className="rounded-2xl bg-linear-to-r from-emerald-50 via-white to-cyan-50 p-5 ring-1 ring-emerald-100 md:p-6">
                         <div className="grid gap-6 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] md:items-start">
                             <div>
@@ -332,6 +363,10 @@ export default function PartnerDetailsPage() {
                                     <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 gap-1">
                                         <CheckCircle2 className="mr-1" size={14} />
                                         {partner.role || "COMPANY"}
+                                    </span>
+                                    <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 gap-1">
+                                        <CheckCircle2 className="mr-1" size={14} />
+                                        {partner.category}
                                     </span>
                                     <span
                                         className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold ${partner.status === false
@@ -465,6 +500,33 @@ export default function PartnerDetailsPage() {
                                 )}
                             </div>
 
+                            {/* Category */}
+                            <div>
+                                <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                                    Category <span className="text-red-500">*</span>
+                                </label>
+                                {editing ? (
+                                    <select
+                                        name="category"
+                                        value={form.category}
+                                        onChange={(e) => handleChange("category", e.target.value)}
+                                        required
+                                        className="w-full appearance-none rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                                    >
+                                        <option value="HOSPITALITY & ACCOMMODATION">Hospitality & Accommodation</option>
+                                        <option value="FOOD & BEVERAGE">Food & Beverage</option>
+                                        <option value="CORPORATE & OFFICE PREMISES">Corporate & Office Premises</option>
+                                        <option value="RETAIL & TRADE">Retail & Trade</option>
+                                        <option value="SERVICES & ARTISANS">Services & Artisans</option>
+                                        <option value="MEDIA & TELECOMMUNICATIONS">Media & Telecommunications</option>
+                                    </select>
+                                ) : (
+                                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900">
+                                        {partner.category || "HOSPITALITY & ACCOMMODATION"}
+                                    </div>
+                                )}
+                            </div>
+
                             <div className="md:col-span-2">
                                 <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
                                     Location
@@ -484,6 +546,69 @@ export default function PartnerDetailsPage() {
                             </div>
                         </div>
                     </div>
+
+                    {/* wallet card */}
+                    {wallet && (
+                        <div className="rounded-2xl bg-white p-5 ring-1 ring-slate-100 shadow-sm md:p-6">
+                            <div className="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                <h3 className="text-lg font-semibold text-slate-900">
+                                    Wallet Details
+                                </h3>
+                                <Link
+                                    href={`/admin/partners/${partner?.uid || id}/finance`}
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-emerald-700"
+                                >
+                                    <span>View Finance</span>
+                                </Link>
+                            </div>
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div>
+                                    <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                                        Ledger Balance
+                                    </label>
+                                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900">
+                                        {typeof wallet.balance === 'number'
+                                            ? `₦${wallet.balance.toFixed(2)}`
+                                            : wallet.balance !== undefined
+                                                ? `₦${wallet.balance}`
+                                                : "—"}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                                        Current Balance
+                                    </label>
+                                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900">
+                                        {typeof wallet.balance === 'number' ? `₦${wallet.balance.toFixed(2)}` : "—"}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* account details */}
+                    {wallet && (
+                        <div className="rounded-2xl bg-white p-5 ring-1 ring-slate-100 shadow-sm md:p-6">
+                            <h3 className="mb-4 text-lg font-semibold text-slate-900">Account Details</h3>
+                            <div className="grid gap-4 md:grid-cols-3">
+                                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Account Name</p>
+                                    <p className="mt-2 wrap-break-word text-sm font-medium text-slate-900">{wallet.accountName || "—"}</p>
+                                </div>
+
+                                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Bank</p>
+                                    <p className="mt-2 wrap-break-word text-sm font-medium text-slate-900">{wallet.bank?.name || "—"}</p>
+                                </div>
+
+                                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Account Number</p>
+                                    <p className="mt-2 wrap-break-word text-sm font-medium text-slate-900">{wallet.accountNo || "—"}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* detail summary */}
                     <div className="rounded-2xl bg-white p-5 ring-1 ring-slate-100 shadow-sm md:p-6">

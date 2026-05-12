@@ -1,5 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { getRecord } from "@/lib/services/payment";
+import { PaymentTransaction } from "@/lib/types";
 import { printAsync } from "expo-print";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft, Download, Share2 } from "lucide-react-native";
@@ -17,10 +19,10 @@ import QRCode from "react-native-qrcode-svg";
 import ViewShot from "react-native-view-shot";
 
 export default function Receipt() {
-  const { receipt } = useAuth();
+  const { token } = useAuth();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [receiptData, setReceiptData] = useState<any | null>(null);
+  const [receiptData, setReceiptData] = useState<PaymentTransaction | null>(null);
   const [loading, setLoading] = useState(true);
   const { success, failed } = useToast();
   const viewShotRef = useRef<ViewShot | null>(null);
@@ -33,14 +35,14 @@ export default function Receipt() {
     }
     try {
       setLoading(true);
-      const data = await receipt(id);
-      setReceiptData(data);
+      const data = await getRecord(id, token as string);
+      setReceiptData(data.transaction || null);
     } catch (error) {
-      failed("Failed to load receipt");
+      failed("Failed to load payment transaction");
     } finally {
       setLoading(false);
     }
-  }, [failed, id, receipt]);
+  }, [failed, id, token]);
 
   useEffect(() => {
     loadReceipt();
@@ -137,11 +139,11 @@ export default function Receipt() {
   const handleShare = async () => {
     try {
       const shareMessage = `
- Karu REVENUE - Digital Receipt
+ Amac REVENUE - Digital Receipt
 Receipt No: ${receiptData?.reference || "N/A"}
-Date: ${receiptData?.date || "N/A"}
-Business: ${receiptData?.businessName || "N/A"}
-Amount: ₦${receiptData?.amount?.toLocaleString() || "0"}
+Date: ${receiptData?.date ? new Date(receiptData.date).toLocaleDateString() : receiptData?.createdAt ? new Date(receiptData.createdAt).toLocaleDateString() : "N/A"}
+Name: ${receiptData?.name || "N/A"}
+Amount: ₦${Number(receiptData?.amount || 0).toLocaleString()}
 Status: ${receiptData?.status || "N/A"}
       `.trim();
 
@@ -211,6 +213,22 @@ Status: ${receiptData?.status || "N/A"}
         ? "#2266ff"
         : "#e94b4b";
 
+  const qrPayload = {
+    userId: receiptData?.userId || "N/A",
+    amount: receiptData?.amount || 0,
+    reference: receiptData?.reference || "N/A",
+    date: receiptData?.date ? new Date(receiptData.date).toISOString() : receiptData?.createdAt ? new Date(receiptData.createdAt).toISOString() : "N/A",
+  };
+
+  const transactionDate = receiptData?.date
+    ? new Date(receiptData.date)
+    : receiptData?.createdAt
+      ? new Date(receiptData.createdAt)
+      : null;
+
+  const transactionTitle = receiptData?.name || receiptData?.type || "Payment Transaction";
+  const transactionSubtitle = receiptData?.category || receiptData?.billing || "Transaction details";
+
   return (
     <ScrollView style={styles.safe} contentContainerStyle={styles.container}>
       <View style={styles.header}>
@@ -233,24 +251,26 @@ Status: ${receiptData?.status || "N/A"}
         <View style={styles.cardWrap}>
           <View style={styles.card}>
             <View style={styles.logoWrap}>
-              <Image 
-                source={require("@/assets/images/icon.png")} 
-                style={styles.logo} 
+              <Image
+                source={require("@/assets/images/icon.png")}
+                style={styles.logo}
               />
             </View>
-            <Text style={styles.brand}>Karu REVENUE</Text>
-            <Text style={styles.subtitle}>Official Receipt</Text>
+            <Text style={styles.brand}>Amac REVENUE</Text>
+            <Text style={styles.subtitle}>Payment Transaction Receipt</Text>
 
             <View style={styles.row}>
               <View style={styles.colLeft}>
-                <Text style={styles.label}>Receipt No:</Text>
+                <Text style={styles.label}>Reference:</Text>
                 <Text style={styles.value}>
                   {receiptData?.reference || "N/A"}
                 </Text>
               </View>
               <View style={styles.colRight}>
                 <Text style={styles.label}>Date:</Text>
-                <Text style={styles.value}>{receiptData?.date || "N/A"}</Text>
+                <Text style={styles.value}>
+                  {transactionDate ? transactionDate.toLocaleDateString() : "N/A"}
+                </Text>
               </View>
             </View>
 
@@ -261,22 +281,25 @@ Status: ${receiptData?.status || "N/A"}
 
             <View style={styles.divider} />
 
-            <Text style={styles.label}>Business Name:</Text>
+            <Text style={styles.label}>Transaction:</Text>
             <Text style={styles.valueBlock}>
-              {receiptData?.businessName || "N/A"}
+              {transactionTitle}
             </Text>
+
+            <Text style={[styles.label, { marginTop: 8 }]}>Details:</Text>
+            <Text style={styles.valueBlock}>{transactionSubtitle}</Text>
 
             <View style={styles.divider} />
 
             <View style={styles.rowSpace}>
               <View>
-                <Text style={styles.label}>
-                  {receiptData?.frequency || "Monthly"}
+                <Text style={styles.label}>Amount:</Text>
+                <Text style={styles.value}>
+                  {receiptData?.currency || "NGN"}
                 </Text>
-                <Text style={styles.value}>Amount:</Text>
               </View>
               <Text style={styles.amount}>
-                ₦{receiptData?.amount?.toLocaleString() || "0"}
+                ₦{Number(receiptData?.amount || 0).toLocaleString()}
               </Text>
             </View>
 
@@ -293,9 +316,7 @@ Status: ${receiptData?.status || "N/A"}
 
             <View style={styles.qrWrap}>
               <QRCode
-                value={JSON.stringify({
-                  id: receiptData?.reference
-                })}
+                value={JSON.stringify(qrPayload)}
                 size={200}
               />
               <Text style={styles.qrLabel}>Scan QR for verification</Text>
@@ -318,14 +339,7 @@ Status: ${receiptData?.status || "N/A"}
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Amount</Text>
             <Text style={styles.detailValue}>
-              ₦{receiptData?.amount?.toLocaleString() || "0"}
-            </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Due</Text>
-            <Text style={styles.detailValue}>
-              {new Date(receiptData?.due)?.toDateString() || "N/A"}
+              ₦{Number(receiptData?.amount || 0).toLocaleString()}
             </Text>
           </View>
 
@@ -341,57 +355,39 @@ Status: ${receiptData?.status || "N/A"}
           </View>
 
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Payment Method</Text>
+              <Text style={styles.detailLabel}>Type</Text>
             <Text style={styles.detailValue}>
-              {receiptData?.payment || "N/A"}
+                {receiptData?.type || "N/A"}
             </Text>
           </View>
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Date</Text>
-            <Text style={styles.detailValue}>{receiptData?.date || "N/A"}</Text>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Date</Text>
+              <Text style={styles.detailValue}>
+                {transactionDate ? transactionDate.toDateString() : "N/A"}
+              </Text>
           </View>
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Frequency</Text>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Payment ID</Text>
             <Text style={styles.detailValue}>
-              {receiptData?.frequency || "N/A"}
+              {receiptData?.paymentId || "N/A"}
             </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Business Name</Text>
-            <Text style={styles.detailValue}>
-              {receiptData?.businessName || "N/A"}
-            </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Business Type</Text>
-            <Text style={styles.detailValue}>
-              {receiptData?.businessType || "N/A"}
-            </Text>
-          </View>
+            </View>
 
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>User ID</Text>
-            <Text style={styles.detailValue}>
-              {receiptData?.userId || "N/A"}
-            </Text>
+            <Text style={styles.detailValue}>{receiptData?.userId || "N/A"}</Text>
           </View>
+
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Payment Check</Text>
-            <View style={{
-              backgroundColor: '#14a76a',
-              borderRadius: 16,
-              paddingHorizontal: 12,
-              paddingVertical: 4,
-              alignSelf: 'flex-start',
-            }}>
-              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>
-                {receiptData?.isVerify ? 'Verified' : 'Unverified'}
-              </Text>
-            </View>
+            <Text style={styles.detailLabel}>Category</Text>
+            <Text style={styles.detailValue}>{receiptData?.category || "N/A"}</Text>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Billing</Text>
+            <Text style={styles.detailValue}>{receiptData?.billing || "N/A"}</Text>
           </View>
 
           <View style={styles.warningNote}>

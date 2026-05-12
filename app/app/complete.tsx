@@ -28,7 +28,7 @@ export default function CompleteProfileScreen() {
     const [confirmSecurityCode, setConfirmSecurityCode] = useState("");
     const [loading, setLoading] = useState(false);
     const [idType, setIdType] = useState<"BVN" | "NIN">("BVN");
-
+    
     useEffect(() => {
         if (currentUser?.uid) {
             setUid(currentUser.uid);
@@ -57,7 +57,7 @@ export default function CompleteProfileScreen() {
 
     const handleValidateWallet = () => {
         success("Wallet validation successful");
-        if (validationState.hasWallet) {
+        if (wallet) {
             setStep(3);
         } else {
             setStep(2);
@@ -72,7 +72,7 @@ export default function CompleteProfileScreen() {
             const res = await createWallet(
                 currentUser?.fullname || currentUser?.fullname,
                 bvn.trim(),
-                "AGENT",
+                "MEMBER",
                 currentUser?.uid || "",
                 token as string
             );
@@ -117,7 +117,7 @@ export default function CompleteProfileScreen() {
             }
 
             success(res.message || "Security code set successfully");
-            router.replace("/pages/(pages)" as RelativePathString);
+            router.replace("/(pages)" as RelativePathString);
         }
         catch (e: any) {
             console.log(e)

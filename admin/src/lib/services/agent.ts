@@ -1,5 +1,17 @@
 import { API_URL, buildHeaders } from "../api";
 
+async function parseResponseBody(response: Response) {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  const text = await response.text();
+  return {
+    message: text || `HTTP ${response.status}: ${response.statusText}`,
+  };
+}
+
 export type Agent = {
   id?: string;
   uid?: string;
@@ -29,7 +41,7 @@ export async function getAgents(uid: string): Promise<{ ok: boolean; data?: Agen
   const response = await fetch(`${API_URL}/agent/company/${uid}`, {
     headers: {...buildHeaders(false)},
   });
-  const data = await response.json();
+  const data = await parseResponseBody(response);
   if (!response.ok) {
     throw new Error(data.message || "Failed to fetch agents");
   }
@@ -43,7 +55,7 @@ export async function getAgent(uid: string): Promise<{ ok: boolean; agent?: Agen
   const response = await fetch(`${API_URL}/agent/one/${uid}`, {
     headers: {...buildHeaders(false)},
   });
-  const data = await response.json();
+  const data = await parseResponseBody(response);
   if (!response.ok) {
     throw new Error(data.message || "Failed to fetch agents");
   }

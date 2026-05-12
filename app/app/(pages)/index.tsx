@@ -1,7 +1,7 @@
 import { formatCurrency } from "@/config";
 import { useAuth } from "@/hooks/use-auth";
 import { useWallet } from "@/hooks/use-wallet";
-import { Transaction } from "@/lib/types";
+import { Transaction, TransactionStatus } from "@/lib/types";
 import * as Clipboard from "expo-clipboard";
 import { RelativePathString, useRouter } from "expo-router";
 import {
@@ -10,10 +10,9 @@ import {
   Copy,
   Eye,
   EyeOff,
+  HandCoins,
   History,
-  ScanBarcode,
-  User,
-  HandCoins
+  User
 } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -28,23 +27,25 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Dashboard() {
   const router = useRouter();
-  const { currentUser } = useAuth();
+  const { currentUser, token } = useAuth();
 
   const displayName = currentUser?.fullname?.split(" ")[0] + " " + currentUser?.fullname?.split(" ")[1];
   const [accountCopied, setAccountCopied] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const { wallet, toggleHide, hide, refresh, getTransactions } = useWallet();
+  const { wallet, toggleHide, hide, refresh, getTransactions, setUid } = useWallet();
   const walletBalance = Number(wallet?.balance || 0);
   const walletAccountNo = wallet?.accountNo || 0;
   const walletBank = wallet?.bank?.name || "-";
 
   const loadVerifyWallet = useCallback(async () => {
+    setUid(currentUser?.uid || "");
     if (!wallet) {
       router.push("/complete" as RelativePathString);
       return;
     }
+
   }, [router, wallet]);
 
   useEffect(() => {
@@ -67,14 +68,12 @@ export default function Dashboard() {
       }
 
       setHistoryLoading(true);
-      const startDate = new Date(new Date().getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-      const endDate = new Date().toISOString().split("T")[0];
-      const data = await getTransactions(wallet?.accountNo || "", startDate, endDate, wallet?.token || "");
-      const sorted = [...(data?.transactions || [])].sort((a, b) => {
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      });
 
-      setTransactions(sorted);
+      const data = await getTransactions(currentUser.uid || "", token);
+
+      console.log(data)
+
+      setTransactions(data?.transactions || []);
     } catch {
       setTransactions([]);
     } finally {
@@ -96,7 +95,7 @@ export default function Dashboard() {
     }
   };
 
-  const getStatusColor = (status?: string) => {
+  const getStatusColor = (status?: TransactionStatus) => {
     if (status === "SUCCESS") return "#0ea360";
     if (status === "PENDING") return "#f59e0b";
     if (status === "FAILED") return "#ef4444";
@@ -179,7 +178,7 @@ export default function Dashboard() {
             <TouchableOpacity
               style={styles.quickActionItem}
               activeOpacity={0.8}
-              onPress={() => router.push("/payments" as RelativePathString)}
+              onPress={() => router.push("/payment" as RelativePathString)}
             >
               <View style={styles.quickActionIconWrap}>
                 <HandCoins size={20} color="#0ea360" />
@@ -201,7 +200,7 @@ export default function Dashboard() {
             <TouchableOpacity
               style={styles.quickActionItem}
               activeOpacity={0.8}
-              onPress={() => router.push("/(pages)/history" as RelativePathString)}
+              onPress={() => router.push("records" as RelativePathString)}
             >
               <View style={styles.quickActionIconWrap}>
                 <History size={20} color="#0ea360" />
@@ -234,18 +233,18 @@ export default function Dashboard() {
                   key={tx.id}
                   style={styles.historyItem}
                   activeOpacity={0.8}
-                  onPress={() => router.push(`/pages/transaction/${tx.id}` as RelativePathString)}
+                  onPress={() => router.push(`/transaction/${tx.reference}` as RelativePathString)}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.historyTitle}>{tx.type || tx.transactionCategory || "Transaction"}</Text>
-                    <Text style={styles.historySub}>{tx.narration || tx.source}</Text>
+                    <Text style={styles.historyTitle}>{tx.metadata?.transactionType || tx.event || "Transaction"}</Text>
+                    <Text style={styles.historySub}>{tx.metadata?.narration || tx.metadata?.senderName || "-"}</Text>
                     <Text style={styles.historyDate}>
-                      {tx.timeCreated ? new Date(tx.timeCreated).toLocaleDateString() : "-"}
+                      {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : "-"}
                     </Text>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
                     <Text style={styles.historyAmount}>{formatCurrency(Number(tx.amount || 0))}</Text>
-                    <Text style={[styles.historyStatus, { color: getStatusColor(String(tx.status)) }]}>
+                    <Text style={[styles.historyStatus, { color: getStatusColor(tx.status) }]}>
                       {String(tx.status)}
                     </Text>
                   </View>

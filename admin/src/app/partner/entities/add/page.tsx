@@ -182,7 +182,7 @@ export default function AddEntityPage() {
 
     const handlePricingToggle = (pricingId: string) => {
         setFormData((prev) => {
-            const currentPricing = prev.pricing || [];
+            const currentPricing = Array.from(new Set(prev.pricing || []));
             const isSelected = currentPricing.includes(pricingId);
             return {
                 ...prev,
@@ -241,6 +241,7 @@ export default function AddEntityPage() {
 
             const payload = {
                 ...formData,
+                pricing: Array.from(new Set(formData.pricing || [])),
                 center: user.center,
                 location: finalLocation,
                 company: user?.uid || "",
@@ -266,7 +267,14 @@ export default function AddEntityPage() {
     };
 
     const getFilteredPricing = () => {
-        return pricingOptions.filter((p) => p.category === formData.category);
+        const filteredPricing = pricingOptions.filter((p) => p.category === formData.category);
+        const uniquePricing = new Map(
+            filteredPricing
+                .filter((pricing) => pricing?.id)
+                .map((pricing) => [pricing.id as string, pricing]),
+        );
+
+        return Array.from(uniquePricing.values());
     };
 
     if (loading) {

@@ -61,7 +61,9 @@ const memberSafeSelect = {
   createdAt: true,
   updatedAt: true,
   pricing: true,
-  company: true
+  company: true,
+  notifications: true,
+  payments: true
 };
 
 const looksLikeJwt = (value) => typeof value === "string" && value.split(".").length === 3;
@@ -150,8 +152,6 @@ const createMember = async (req, res) => {
       });
     }
 
-    const selectedPricing = await findActivePricingForMember(value.pricing || []);
-
     const { member, initialPayment } = await prisma.$transaction(async (tx) => {
       const createdMember = await tx.member.create({
         data: {
@@ -172,27 +172,57 @@ const createMember = async (req, res) => {
         },
       });
 
-      let createdPayment = null;
+      const selectedPricingIds = Array.isArray(value.pricing) ? value.pricing : [];
+      const availablePricing = selectedPricingIds.length
+        ? await tx.pricing.findMany({
+            where: {
+              id: { in: selectedPricingIds },
+              status: true,
+            },
+            select: {
+              id: true,
+              price: true,
+            },
+          })
+        : [];
 
-      if (selectedPricing) {
-        createdPayment = await createPaymentRecord(
+      const pricingById = new Map(
+        availablePricing.map((pricing) => [pricing.id, pricing]),
+      );
+
+      const createdPayments = [];
+
+      for (const pricingId of selectedPricingIds) {
+        const matchedPricing = pricingById.get(pricingId);
+
+        if (!matchedPricing) {
+          console.warn("Skipping unavailable pricing for new member:", pricingId);
+          continue;
+        }
+
+        const createdPayment = await createPaymentRecord(
           {
             userId: createdMember.uid,
             frequency: createdMember.billingFrequency,
             sessions: [],
             debt: 0,
             due: new Date(),
-            amount: Number(selectedPricing.price),
-            payment: selectedPricing.id,
+            amount: Number(matchedPricing.price),
+            payment: pricingId,
             status: "PENDING",
             isVerify: false,
             reference: generatePaymentReference(),
           },
           tx,
         );
+
+        createdPayments.push(createdPayment);
       }
 
-      return { member: createdMember, initialPayment: createdPayment };
+      console.log("Created member:", createdMember);
+      console.log("Created initial payments:", createdPayments);
+
+      return { member: createdMember, initialPayment: createdPayments };
     });
 
     if (!member) {
@@ -234,7 +264,7 @@ const createMember = async (req, res) => {
           date: new Date(),
         },
       });
-      
+
     } catch (notificationError) {
       console.error(
         "Failed to create welcome notification:",
@@ -378,10 +408,11 @@ const updateMember = async (req, res) => {
 
 const deleteMember = async (req, res) => {
   try {
-    // Get member before deletion to use for notification
+    // Get member before deletion
     const memberToDelete = await prisma.member.findUnique({
       where: { uid: req.params.id },
       select: {
+        id: true,
         uid: true,
         fullname: true,
         email: true,
@@ -390,28 +421,16 @@ const deleteMember = async (req, res) => {
     if (!memberToDelete)
       return res.status(404).json({ error: "Member not found" });
 
-    // Create notification before deleting
-    try {
-      await prisma.notification.create({
-        data: {
-          userId: memberToDelete.uid,
-          title: "Account Deleted",
-          description: "Your account has been deleted.",
-          type: "UPDATE",
-          date: new Date(),
-        },
-      });
-    } catch (notificationError) {
-      console.error(
-        "Failed to create delete notification:",
-        notificationError.message || notificationError,
-      );
-    }
+    // Delete related notifications first
+    await prisma.notification.deleteMany({
+      where: { userId: memberToDelete.id },
+    });
 
+    // Then delete the member
     const member = await prisma.member.delete({
       where: { uid: req.params.id },
     });
-    res.status(204).json({ ok: true, message: "Member deleted successfully" });
+    res.status(200).json({ ok: true, message: "Member deleted successfully" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
@@ -447,7 +466,6 @@ const login = async (req, res) => {
         phone: true,
         type: true,
         billingFrequency: true,
-        password: true,
         location: true,
         avatar: true,
         status: true,
@@ -455,8 +473,14 @@ const login = async (req, res) => {
         agent: true,
         createdAt: true,
         updatedAt: true,
+        password: true,
+        category: true,
+        pricing: true,
+        company: true,
+        agent: true,
       },
     });
+
     if (!member) {
       return res
         .status(401)
@@ -471,9 +495,11 @@ const login = async (req, res) => {
         .json({ ok: false, message: "Invalid email or password" });
     }
 
-    const ip =
-      req.ip || req.headers["x-forwarded-for"] || req.connection.remoteAddress;
-    console.log(ip);
+    const ip = req.headers['cf-connecting-ip'] ||
+    req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+    req.headers['x-real-ip'] ||
+    req.connection.remoteAddress ||
+    req.socket.remoteAddress 
 
     // Return member data
     const { password: pwd, ...memberWithoutPassword } = member;

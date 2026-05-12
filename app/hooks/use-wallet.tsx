@@ -2,9 +2,10 @@
 import { AUTH_MEMBER, AUTH_MEMBER_TOKEN, AUTH_MEMBER_WALLET, AUTH_MEMBER_WALLET_STATE } from "@/lib/api";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { getWallet, createWallet, initiateTransfer, resolveBankAccount, getBanks, getTransactions } from "@/lib/services/wallet";
+import { getWallet, createWallet, initiateTransfer, resolveBankAccount, getBanks } from "@/lib/services/wallet";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Wallet } from "@/lib/types";
+import { getTransactions, getTransaction } from "@/lib/services/transaction";
 
 const walletContext = createContext<any>(null);
 
@@ -18,6 +19,7 @@ export const useWallet = () => {
 
 export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
     const [wallet, setWallet] = useState<Wallet | null>(null);
+    const [walletState, setWalletState] = useState<boolean>(false);
     const [isWallet, setIsWallet] = useState<boolean>(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
@@ -28,11 +30,9 @@ export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
 
     const toggleHide = async (toggle: boolean) => {
         if (toggle) {
-            await AsyncStorage.setItem(AUTH_MEMBER_WALLET_STATE, JSON.stringify({ hidden: false }));
-            setHide(false);
+            setWalletState(false);
         } else {
-            await AsyncStorage.setItem(AUTH_MEMBER_WALLET_STATE, JSON.stringify({ hidden: true }));
-            setHide(true);
+            setWalletState(true);
         }
     }
 
@@ -50,10 +50,8 @@ export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
 
             const tok = await AsyncStorage.getItem(AUTH_MEMBER_TOKEN);
 
-            const walletState = (await AsyncStorage.getItem(AUTH_MEMBER_WALLET_STATE)) ? JSON.parse(await AsyncStorage.getItem(AUTH_MEMBER_WALLET_STATE) as string) : null;
-
             if (walletState) {
-                setHide(walletState?.hidden);
+                setHide(walletState);
             }
 
             if (tok) {
@@ -117,6 +115,7 @@ export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
         resolveBankAccount,
         getBanks,
         getTransactions,
+        getTransaction,
         createWallet
     };
 

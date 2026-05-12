@@ -227,7 +227,7 @@ export default function PaymentDetailsPage({ params }) {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <h1 className="text-2xl md:text-3xl font-bold">Payment Receipt</h1>
-              <p className="text-emerald-100 mt-1">Karu Revenue Collection</p>
+              <p className="text-emerald-100 mt-1">Amac Revenue Collection</p>
             </div>
             <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${statusConfig.bg} ${statusConfig.text} font-semibold`}>
               <StatusIcon size={20} />
@@ -318,7 +318,7 @@ export default function PaymentDetailsPage({ params }) {
         {/* Receipt Footer */}
         <div className="bg-slate-50 border-t border-slate-200 p-6 text-center">
           <p className="text-sm text-slate-600">
-            This is an official receipt from Karu Revenue Collection System
+            This is an official receipt from Amac Revenue Collection System
           </p>
           <p className="text-xs text-slate-500 mt-1">
             For inquiries, please contact the revenue office with your reference number

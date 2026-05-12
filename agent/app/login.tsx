@@ -99,7 +99,7 @@ export default function LoginScreen() {
               <TextInput
                 value={entityId}
                 onChangeText={setEntityId}
-                placeholder="amac@karu.ac.ke"
+                placeholder="test@email.ng"
                 placeholderTextColor="#9aa3aa"
                 style={styles.input}
                 keyboardType="default"

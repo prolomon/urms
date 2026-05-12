@@ -20,7 +20,7 @@ type WalletTransactionType = "credit" | "debit";
 import { usePartner } from "@/context/PartnerContext";
 import { useWallet } from "@/context/WalletContext";
 import { useRouter } from "next/navigation";
-import { Transaction } from "@/lib/services/wallet";
+import { Transaction, TransactionStatus } from "@/lib/services/wallet";
 
 function WalletPage() {
     const router = useRouter();
@@ -31,39 +31,33 @@ function WalletPage() {
     const { user } = usePartner();
     const { wallet, isWallet, loading, error, message, refresh, setUid, getTransactions } = useWallet();
     const [transactions, setTransactions] = useState<Transaction[]>([]);
-    const [toDate, setToDate] = useState(new Date().toISOString().split("T")[0]);
-    const [fromDate, setFromDate] = useState(
+    const [toDate, setToDate] = useState(() => new Date().toISOString().split("T")[0]);
+    const [fromDate, setFromDate] = useState(() =>
         new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
     );
+    const [load, setLoad] = useState(false);
 
     const fetChTransactions = useCallback(async () => {
-        if (wallet) {
-            try {
-                const res = await getTransactions(wallet.accountNo, fromDate, toDate);
-                if (res.ok && res.transactions?.data?.results) {
-                    setTransactions(res.transactions.data.results);
-                } else {
-                    setTransactions([]);
-                }
-            } catch (error) {
-                console.error("Error fetching transactions:", error);
-                setTransactions([]);
-            }
+        const userId = user?.uid || wallet?.userId || wallet?.id;
+        if (!userId) return;
+        setLoad(true);
+        try {
+            const res = await getTransactions(userId);
+            const results =
+                res.transactions?.data?.results || res.transactions?.data || res.transactions || [];
+            const items = Array.isArray(results) ? results : results.results || [];
+            setTransactions(items as Transaction[]);
+        } catch (error) {
+            console.error("Error fetching transactions:", error);
+            setTransactions([]);
+        } finally {
+            setLoad(false);
         }
-    }, [wallet, getTransactions, fromDate, toDate]);
+    }, [wallet, getTransactions, user?.uid]);
 
     useEffect(() => {
         fetChTransactions();
     }, [fetChTransactions]);
-
-    useEffect(() => {
-
-        setUid(user?.uid || null);
-
-        if (!wallet) {
-            router.replace("/partner/complete");
-        }
-    }, [router, wallet, setUid, user?.uid]);
 
     //this id for the bank details 
     const bankDetails = {
@@ -81,16 +75,22 @@ function WalletPage() {
 
     // This is for the balance calculations, we can connect this to the backend later
     const balances = useMemo(() => {
+        const statusToString = (s: any) => {
+            if (s == null) return "";
+            if (typeof s === "number") return TransactionStatus[s] ?? String(s);
+            return String(s);
+        };
+
         const successfulCredits = transactions
-            .filter((item) => (item.type || "").toLowerCase() === "credit" && (item.status || "").toLowerCase() === "success")
+            .filter((item) => (String(item.event || "")).toLowerCase() === "credit" && statusToString(item.status).toLowerCase() === "success")
             .reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
         const successfulDebits = transactions
-            .filter((item) => (item.type || "").toLowerCase() === "debit" && (item.status || "").toLowerCase() === "success")
+            .filter((item) => (String(item.event || "")).toLowerCase() === "debit" && statusToString(item.status).toLowerCase() === "success")
             .reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
         const pendingDebits = transactions
-            .filter((item) => (item.type || "").toLowerCase() === "debit" && (item.status || "").toLowerCase() === "pending")
+            .filter((item) => (String(item.event || "")).toLowerCase() === "debit" && statusToString(item.status).toLowerCase() === "pending")
             .reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
         const walletBalance = Number(wallet?.balance ?? 0);
@@ -385,33 +385,33 @@ function WalletPage() {
                             ) : (
                                 transactions.map((item) => (
                                     <tr key={item.id} className="border-b border-slate-100 last:border-b-0">
-                                        <td className="py-4 text-sm font-medium text-slate-800"><Link href={`/partner/transactions/${item.id}`}>{item.sessionId}</Link></td>
-                                        <td className="py-4 text-sm text-slate-600">{item.type}</td>
-                                        <td className="py-4 text-sm text-slate-600">
-                                            {new Date(item.timeCreated || item.timeUpdated).toLocaleString("en-NG", {
-                                                year: "numeric",
-                                                month: "short",
-                                                day: "numeric",
-                                                hour: "2-digit",
-                                                minute: "2-digit",
-                                            })}
-                                        </td>
-                                        <td className="py-4 text-sm">{statusBadge((item.status || "").toUpperCase() as WalletTransactionStatus)}</td>
-                                        <td
-                                            className={`py-4 text-right text-sm font-semibold ${(item.type || "").toLowerCase() === "credit" ? "text-emerald-700" : "text-rose-700"
-                                                }`}
-                                        >
-                                            <span className="inline-flex items-center gap-1.5">
-                                                {(item.type || "").toLowerCase() === "credit" ? (
-                                                    <ArrowDownLeft className="h-4 w-4" />
-                                                ) : (
-                                                    <ArrowUpRight className="h-4 w-4" />
-                                                )}
-                                                {(item.type || "").toLowerCase() === "credit" ? "+" : "-"}
-                                                {formatCurrency(Number(item.amount || 0))}
-                                            </span>
-                                        </td>
-                                    </tr>
+                                                <td className="py-4 text-sm font-medium text-slate-800"><Link href={`/partner/wallet/transaction/${item.id}`}>{item.reference || item.id}</Link></td>
+                                                <td className="py-4 text-sm text-slate-600">{item.event || "—"}</td>
+                                                <td className="py-4 text-sm text-slate-600">
+                                                    {new Date(String(item.createdAt || item.updatedAt)).toLocaleString("en-NG", {
+                                                        year: "numeric",
+                                                        month: "short",
+                                                        day: "numeric",
+                                                        hour: "2-digit",
+                                                        minute: "2-digit",
+                                                    })}
+                                                </td>
+                                                <td className="py-4 text-sm">{statusBadge((String(item.status || "")).toUpperCase() as WalletTransactionStatus)}</td>
+                                                <td
+                                                    className={`py-4 text-right text-sm font-semibold ${(String(item.event || "")).toLowerCase() === "credit" ? "text-emerald-700" : "text-rose-700"
+                                                        }`}
+                                                >
+                                                    <span className="inline-flex items-center gap-1.5">
+                                                        {(String(item.event || "")).toLowerCase() === "credit" ? (
+                                                            <ArrowDownLeft className="h-4 w-4" />
+                                                        ) : (
+                                                            <ArrowUpRight className="h-4 w-4" />
+                                                        )}
+                                                        {(String(item.event || "")).toLowerCase() === "credit" ? "+" : "-"}
+                                                        {formatCurrency(Number(item.amount || 0))}
+                                                    </span>
+                                                </td>
+                                            </tr>
                                 ))
                             )}
                         </tbody>

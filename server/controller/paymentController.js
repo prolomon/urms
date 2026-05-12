@@ -3,13 +3,67 @@ import {
   createPaymentSchema,
   updatePaymentScheduleSchema,
   verifyPaymentSchema,
-} from '../validator/paymentValidator.js';
-import { customAlphabet } from 'nanoid';
+  makePaymentSchema,
+} from "../validator/paymentValidator.js";
+import { customAlphabet } from "nanoid";
+import { initiateTransfer, createRecipient } from "../service/paystack.js";
+import { generateTransactionReference } from "./paymentTransactionController.js";
+import argon2 from "argon2";
 
-const paymentReferenceSuffix = customAlphabet('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ', 8);
+const paymentReferenceSuffix = customAlphabet(
+  "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+  8
+);
 
 const generatePaymentReference = () => {
   return `PAY-REF|${new Date().toISOString()}-${paymentReferenceSuffix()}`;
+};
+
+const getWalletBankDetails = (wallet) => {
+  const bank = wallet?.bank || {};
+
+  return {
+    accountNumber: wallet?.accountNo || null,
+    accountName: wallet?.accountName || null,
+    bankName: bank?.name || null,
+    bankCode: bank?.code || null,
+  };
+};
+
+const generateReceipt = ({
+  reference,
+  paymentRecord,
+  grossAmount,
+  fee,
+  netAmount,
+  mainAmount,
+  agentAmount,
+  technologyAmount,
+  senderWallet,
+  mainWallet,
+  agentWallet,
+}) => {
+  const sender = getWalletBankDetails(senderWallet);
+
+  return {
+    reference,
+    paymentReference: paymentRecord.reference,
+    paymentId: paymentRecord.id,
+    date: new Date().toISOString(),
+    grossAmount,
+    fee,
+    netAmount,
+    sender,
+    recipients: {
+      admin: getWalletBankDetails(mainWallet),
+      agent: getWalletBankDetails(agentWallet),
+    },
+    breakdown: {
+      main: mainAmount,
+      agent: agentAmount,
+      technology: technologyAmount,
+    },
+  };
 };
 
 const normalizeSessions = (value) => {
@@ -26,11 +80,11 @@ const normalizeSessions = (value) => {
 
 const getNextDueDate = (dueDate, frequency) => {
   const nextDueDate = new Date(dueDate || new Date());
-  const normalizedFrequency = String(frequency || 'MONTHLY').toUpperCase();
+  const normalizedFrequency = String(frequency || "MONTHLY").toUpperCase();
 
-  if (normalizedFrequency === 'YEARLY') {
+  if (normalizedFrequency === "YEARLY") {
     nextDueDate.setFullYear(nextDueDate.getFullYear() + 1);
-  } else if (normalizedFrequency === 'QUARTERLY') {
+  } else if (normalizedFrequency === "QUARTERLY") {
     nextDueDate.setMonth(nextDueDate.getMonth() + 3);
   } else {
     nextDueDate.setMonth(nextDueDate.getMonth() + 1);
@@ -44,13 +98,13 @@ const createPaymentRecord = async (data, client = prisma) => {
     data: {
       reference: data.reference || generatePaymentReference(),
       userId: data.userId,
-      frequency: data.frequency || 'MONTHLY',
+      frequency: data.frequency || "MONTHLY",
       sessions: normalizeSessions(data.sessions),
       debt: Number(data.debt ?? 0),
       due: data.due ? new Date(data.due) : new Date(),
       amount: Number(data.amount),
       payment: String(data.payment),
-      status: data.status || 'PENDING',
+      status: data.status || "PENDING",
       isVerify: Boolean(data.isVerify),
     },
   });
@@ -81,7 +135,7 @@ const createRecurringPaymentForPayment = async (payment, client = prisma) => {
       due: nextDueDate,
       amount: Number(payment.amount),
       payment: payment.payment,
-      status: 'PENDING',
+      status: "PENDING",
       isVerify: false,
     },
   });
@@ -91,7 +145,9 @@ const createRecurringPaymentForPayment = async (payment, client = prisma) => {
 
 const createPayment = async (req, res) => {
   try {
-    const { error, value } = createPaymentSchema.validate(req.body, { abortEarly: false });
+    const { error, value } = createPaymentSchema.validate(req.body, {
+      abortEarly: false,
+    });
     if (error) {
       const errors = error.details.map((detail) => detail.message);
       return res.status(400).json({
@@ -104,11 +160,14 @@ const createPayment = async (req, res) => {
     const payment = await createPaymentRecord(value);
 
     try {
-      const notificationType = payment.status === 'SUCCESS' ? 'SUCCESS' : 'PENDING';
-      const notificationTitle = payment.status === 'SUCCESS' ? 'Payment Successful' : 'Payment Pending';
-      const notificationDescription = payment.status === 'SUCCESS'
-        ? `Your payment of ${payment.amount} has been processed successfully.`
-        : `Your payment of ${payment.amount} is pending approval.`;
+      const notificationType =
+        payment.status === "SUCCESS" ? "SUCCESS" : "PENDING";
+      const notificationTitle =
+        payment.status === "SUCCESS" ? "Payment Successful" : "Payment Pending";
+      const notificationDescription =
+        payment.status === "SUCCESS"
+          ? `Your payment of ${payment.amount} has been processed successfully.`
+          : `Your payment of ${payment.amount} is pending approval.`;
 
       await prisma.notification.create({
         data: {
@@ -120,13 +179,20 @@ const createPayment = async (req, res) => {
         },
       });
     } catch (notificationError) {
-      console.error('Failed to create payment notification:', notificationError.message || notificationError);
+      console.error(
+        "Failed to create payment notification:",
+        notificationError.message || notificationError
+      );
     }
 
-    return res.status(201).json({ ok: true, message: 'Payment created successfully', payment });
+    return res
+      .status(201)
+      .json({ ok: true, message: "Payment created successfully", payment });
   } catch (err) {
-    console.error('Create payment error:', err);
-    return res.status(500).json({ ok: false, message: err?.message || 'Server error' });
+    console.error("Create payment error:", err);
+    return res
+      .status(500)
+      .json({ ok: false, message: err?.message || "Server error" });
   }
 };
 
@@ -135,17 +201,21 @@ const getPaymentsByUserId = async (req, res) => {
     const { userId } = req.params;
 
     if (!userId) {
-      return res.status(400).json({ ok: false, message: 'User ID is required' });
+      return res
+        .status(400)
+        .json({ ok: false, message: "User ID is required" });
     }
 
     const payments = await prisma.payment.findMany({
       where: { userId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
 
     return res.status(200).json({ ok: true, payments });
   } catch (err) {
-    return res.status(500).json({ ok: false, message: err?.message || 'Server error' });
+    return res
+      .status(500)
+      .json({ ok: false, message: err?.message || "Server error" });
   }
 };
 
@@ -154,7 +224,9 @@ const getPaymentByReference = async (req, res) => {
     const { reference } = req.params;
 
     if (!reference) {
-      return res.status(400).json({ ok: false, message: 'Payment reference is required' });
+      return res
+        .status(400)
+        .json({ ok: false, message: "Payment reference is required" });
     }
 
     const payment = await prisma.payment.findUnique({
@@ -162,27 +234,62 @@ const getPaymentByReference = async (req, res) => {
     });
 
     if (!payment) {
-      return res.status(404).json({ ok: false, message: 'Payment not found' });
+      return res.status(404).json({ ok: false, message: "Payment not found" });
     }
 
     return res.status(200).json({ ok: true, payment });
   } catch (err) {
-    return res.status(500).json({ ok: false, message: err?.message || 'Server error' });
+    return res
+      .status(500)
+      .json({ ok: false, message: err?.message || "Server error" });
+  }
+};
+
+const getPaymentById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res
+        .status(400)
+        .json({ ok: false, message: "Payment id is required" });
+    }
+
+    const payment = await prisma.payment.findUnique({
+      where: { id },
+    });
+
+    if (!payment) {
+      return res.status(404).json({ ok: false, message: "Payment not found" });
+    }
+
+    return res.status(200).json({ ok: true, payment });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ ok: false, message: err?.message || "Server error" });
   }
 };
 
 const getAllPayments = async (req, res) => {
   try {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+    const limit = Math.min(
+      Math.max(parseInt(req.query.limit, 10) || 20, 1),
+      100
+    );
     const skip = (page - 1) * limit;
 
     const [payments, total] = await Promise.all([
       prisma.payment.findMany({
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: { member: { select: { id: true, fullname: true, email: true, uid: true } } },
+        orderBy: { createdAt: "desc" },
+        include: {
+          member: {
+            select: { id: true, fullname: true, email: true, uid: true },
+          },
+        },
       }),
       prisma.payment.count(),
     ]);
@@ -198,14 +305,18 @@ const getAllPayments = async (req, res) => {
       },
     });
   } catch (err) {
-    return res.status(500).json({ ok: false, message: err?.message || 'Server error' });
+    return res
+      .status(500)
+      .json({ ok: false, message: err?.message || "Server error" });
   }
 };
 
 const verifyPayment = async (req, res) => {
   try {
     const { id } = req.params;
-    const { error, value } = verifyPaymentSchema.validate(req.body, { abortEarly: false });
+    const { error, value } = verifyPaymentSchema.validate(req.body, {
+      abortEarly: false,
+    });
 
     if (error) {
       const errors = error.details.map((detail) => detail.message);
@@ -217,7 +328,9 @@ const verifyPayment = async (req, res) => {
     }
 
     if (!id) {
-      return res.status(400).json({ ok: false, message: 'Payment reference is required' });
+      return res
+        .status(400)
+        .json({ ok: false, message: "Payment reference is required" });
     }
 
     const payment = await prisma.payment.findUnique({
@@ -225,11 +338,13 @@ const verifyPayment = async (req, res) => {
     });
 
     if (!payment) {
-      return res.status(404).json({ ok: false, message: 'Payment not found' });
+      return res.status(404).json({ ok: false, message: "Payment not found" });
     }
 
     const incomingSessions = normalizeSessions(value.session ?? value.sessions);
-    const updatedSessions = Array.from(new Set([...(payment.sessions || []), ...incomingSessions]));
+    const updatedSessions = Array.from(
+      new Set([...(payment.sessions || []), ...incomingSessions])
+    );
     const amountPaid = Number(value.amountPaid ?? payment.amount);
     const currentDebt = Number(payment.debt ?? 0);
 
@@ -246,7 +361,10 @@ const verifyPayment = async (req, res) => {
       }
     }
 
-    const outstandingForCurrentCycle = Math.max(Number(payment.amount) - remainingPayment, 0);
+    const outstandingForCurrentCycle = Math.max(
+      Number(payment.amount) - remainingPayment,
+      0
+    );
     updatedDebt += outstandingForCurrentCycle;
     const fullyPaid = updatedDebt <= 0;
 
@@ -255,7 +373,7 @@ const verifyPayment = async (req, res) => {
       data: {
         isVerify: true,
         debt: updatedDebt,
-        status: fullyPaid ? 'SUCCESS' : 'PENDING',
+        status: fullyPaid ? "SUCCESS" : "PENDING",
         sessions: updatedSessions,
       },
       include: { member: true },
@@ -265,11 +383,11 @@ const verifyPayment = async (req, res) => {
       await prisma.notification.create({
         data: {
           userId: updatedPayment.userId,
-          title: fullyPaid ? 'Payment Verified' : 'Payment Partially Verified',
+          title: fullyPaid ? "Payment Verified" : "Payment Partially Verified",
           description: fullyPaid
             ? `Your payment of ${amountPaid} has been verified successfully.`
             : `Your payment of ${amountPaid} has been verified. Remaining debt: ${updatedDebt}.`,
-          type: fullyPaid ? 'SUCCESS' : 'PENDING',
+          type: fullyPaid ? "SUCCESS" : "PENDING",
           date: new Date(),
         },
       });
@@ -277,18 +395,24 @@ const verifyPayment = async (req, res) => {
 
     return res.status(200).json({
       ok: true,
-      message: fullyPaid ? 'Payment verified successfully' : 'Payment verified with remaining debt',
+      message: fullyPaid
+        ? "Payment verified successfully"
+        : "Payment verified with remaining debt",
       payment: updatedPayment,
     });
   } catch (err) {
-    return res.status(500).json({ ok: false, message: err?.message || 'Server error' });
+    return res
+      .status(500)
+      .json({ ok: false, message: err?.message || "Server error" });
   }
 };
 
 const updatePaymentSchedule = async (req, res) => {
   try {
     const { id } = req.params;
-    const { error, value } = updatePaymentScheduleSchema.validate(req.body, { abortEarly: false });
+    const { error, value } = updatePaymentScheduleSchema.validate(req.body, {
+      abortEarly: false,
+    });
 
     if (error) {
       const errors = error.details.map((detail) => detail.message);
@@ -300,7 +424,9 @@ const updatePaymentSchedule = async (req, res) => {
     }
 
     if (!id) {
-      return res.status(400).json({ ok: false, message: 'Payment id is required' });
+      return res
+        .status(400)
+        .json({ ok: false, message: "Payment id is required" });
     }
 
     const payment = await prisma.payment.findUnique({
@@ -308,7 +434,7 @@ const updatePaymentSchedule = async (req, res) => {
     });
 
     if (!payment) {
-      return res.status(404).json({ ok: false, message: 'Payment not found' });
+      return res.status(404).json({ ok: false, message: "Payment not found" });
     }
 
     const updatedPayment = await prisma.payment.update({
@@ -322,21 +448,496 @@ const updatePaymentSchedule = async (req, res) => {
 
     return res.status(200).json({
       ok: true,
-      message: 'Payment schedule updated successfully',
+      message: "Payment schedule updated successfully",
       payment: updatedPayment,
     });
   } catch (err) {
-    return res.status(500).json({ ok: false, message: err?.message || 'Server error' });
+    return res
+      .status(500)
+      .json({ ok: false, message: err?.message || "Server error" });
   }
 };
 
+const makePayment = async (req, res) => {
+  try {
+    const { error, value } = makePaymentSchema.validate(req.body, {
+      abortEarly: false,
+    });
+
+    if (error) {
+      const errors = error.details.map((detail) => detail.message);
+      return res.status(400).json({
+        ok: false,
+        message: errors[0],
+        errors,
+      });
+    }
+
+    const { amount, center, company, pin } = value;
+    const { userId, paymentId } = req.params;
+
+    const member = await prisma.member.findUnique({
+      where: { uid: userId },
+      select: { uid: true, secureToken: true },
+    });
+
+    if (!member) {
+      return res.status(404).json({ ok: false, message: "Member not found" });
+    }
+
+    if (!member.secureToken) {
+      return res
+        .status(400)
+        .json({ ok: false, message: "Security token is not set" });
+    }
+
+    const securityCode = String(pin || value.securityCode || "").trim();
+
+    if (!securityCode) {
+      return res.status(400).json({ ok: false, message: "PIN is required" });
+    }
+
+    const isValid = await argon2.verify(member.secureToken, securityCode);
+
+    if (!isValid) {
+      return res.status(401).json({ ok: false, message: "Invalid security code" });
+    }
+
+    const [
+      paymentRecord,
+      main,
+      mainWallet,
+      agentWallet,
+      senderWallet,
+      technologyWallet,
+    ] = await Promise.all([
+      prisma.payment.findFirst({
+        where: { payment: paymentId },
+        select: {
+          id: true,
+          reference: true,
+          userId: true,
+          frequency: true,
+          sessions: true,
+          debt: true,
+          due: true,
+          amount: true,
+          payment: true,
+          status: true,
+          isVerify: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      prisma.admin.findFirst({
+        where: { uid: center },
+        select: {
+          id: true,
+          uid: true,
+          center: true,
+          email: true,
+          password: true,
+          avatar: true,
+          role: true,
+          paymentConfig: true,
+          createdAt: true,
+          updatedAt: true,
+          location: true,
+          state: true,
+          address: true,
+          lga: true,
+          country: true,
+          status: true,
+          phone: true,
+          adminName: true,
+          adminEmail: true,
+          adminLocation: true,
+          adminPhone: true,
+        },
+      }),
+      prisma.wallet.findFirst({
+        where: { userId: company, role: "ADMIN" },
+        select: {
+          id: true,
+          userId: true,
+          status: true,
+          role: true,
+          accountHolderId: true,
+          createdAt: true,
+          updatedAt: true,
+          balance: true,
+          accountNo: true,
+          accountName: true,
+          currency: true,
+          bank: true,
+          identification: true,
+          verify: true,
+        },
+      }),
+      prisma.wallet.findFirst({
+        where: { userId: company, role: "COMPANY" },
+        select: {
+          id: true,
+          userId: true,
+          status: true,
+          role: true,
+          createdAt: true,
+          updatedAt: true,
+          balance: true,
+          accountNo: true,
+          accountHolderId: true,
+          accountName: true,
+          currency: true,
+          bank: true,
+          identification: true,
+          verify: true,
+        },
+      }),
+      prisma.wallet.findFirst({
+        where: { userId, role: "MEMBER" },
+        select: {
+          id: true,
+          userId: true,
+          status: true,
+          role: true,
+          createdAt: true,
+          updatedAt: true,
+          balance: true,
+          accountNo: true,
+          accountHolderId: true,
+          accountName: true,
+          currency: true,
+          bank: true,
+          identification: true,
+          verify: true,
+        },
+      }),
+      prisma.wallet.findFirst({
+        where: {
+          userId: "URMSAD-U4XJ4RKVMU",
+          role: "ADMIN",
+        },
+        select: {
+          id: true,
+          userId: true,
+          status: true,
+          role: true,
+          createdAt: true,
+          updatedAt: true,
+          balance: true,
+          accountNo: true,
+          accountName: true,
+          currency: true,
+          accountHolderId: true,
+          bank: true,
+          identification: true,
+          verify: true,
+        },
+      }),
+    ]);
+
+    if (!paymentRecord) {
+      return res
+        .status(404)
+        .json({ ok: false, message: "Payment record not found" });
+    }
+
+    if (!main) {
+      return res
+        .status(500)
+        .json({ ok: false, message: "Main admin not found" });
+    }
+
+    if (!main.paymentConfig) {
+      return res
+        .status(500)
+        .json({ ok: false, message: "Payment configuration is incomplete" });
+    }
+
+    // Parse payment config for split percentages
+    const paymentConfig = main.paymentConfig || {
+      main: 65,
+      agent: 25,
+      technology: 10,
+    };
+
+    const grossAmount = Number(amount);
+    const feePercentage = 0.02; // 5% fee
+    const fee = grossAmount * feePercentage;
+    const totalAmount = grossAmount - fee;
+    const receiptReference = generateTransactionReference();
+
+    if (senderWallet && Number(senderWallet.balance) < grossAmount) {
+      return res
+        .status(400)
+        .json({ ok: false, message: "Insufficient balance in sender wallet" });
+    }
+
+    // Calculate split amounts
+    const mainShare = Number(paymentConfig.main ?? 0);
+    const agentShare = Number(paymentConfig.agent ?? 0);
+    const technologyShare = Number(paymentConfig.technology ?? 0);
+
+    const mainAmount = (totalAmount * mainShare) / 100;
+    const agentAmount = (totalAmount * agentShare) / 100;
+    const technologyAmount = (totalAmount * technologyShare) / 100;
+
+    const senderDetails = getWalletBankDetails(senderWallet);
+    const receipt = generateReceipt({
+      reference: receiptReference,
+      paymentRecord,
+      grossAmount,
+      fee,
+      netAmount: totalAmount,
+      mainAmount,
+      agentAmount,
+      technologyAmount,
+      senderWallet,
+      mainWallet,
+      agentWallet,
+    });
+
+    const paymentResult = await prisma.$transaction(async (tx) => {
+      const updatedPayment = await tx.payment.update({
+        where: { id: paymentRecord.id },
+        data: {
+          debt: paymentRecord.amount - totalAmount,
+          status: "SUCCESS",
+        },
+      });
+
+      if (mainWallet) {
+        await tx.wallet.update({
+          where: { id: mainWallet.id },
+          data: {
+            balance: {
+              increment: mainAmount,
+            },
+          },
+        });
+      }
+
+      if (agentWallet) {
+        await tx.wallet.update({
+          where: { id: agentWallet.id },
+          data: {
+            balance: {
+              increment: agentAmount,
+            },
+          },
+        });
+      }
+
+      if (technologyWallet) {
+        await tx.wallet.update({
+          where: { id: technologyWallet.id },
+          data: {
+            balance: {
+              increment: technologyAmount + fee,
+            },
+          },
+        });
+      }
+
+      if (senderWallet) {
+        await tx.wallet.update({
+          where: { id: senderWallet.id },
+          data: {
+            balance: {
+              decrement: grossAmount,
+            },
+          },
+        });
+      }
+
+      if (main) {
+        await tx.admin.update({
+          where: { id: main.id },
+          data: {
+            ledger: {
+              increment: totalAmount,
+            },
+          },
+        });
+      }
+
+      await Promise.all([
+        tx.transaction.create({
+          data: {
+            reference: `${receiptReference}-ADMIN`,
+            merchantTxRef: main.uid,
+            event: "payment.admin.credit",
+            status: "SUCCESS",
+            amount: mainAmount,
+            currency: "NGN",
+            channel: "wallet",
+            gatewayResponse: "Admin wallet credited",
+            customerEmail: main.adminEmail || main.email || null,
+            paymentId: paymentRecord.id,
+            userId: main.uid,
+            metadata: {
+              receipt,
+              role: "ADMIN",
+              transactionType: "CREDIT",
+              creditedAmount: mainAmount,
+              senderAccountNumber: senderDetails.accountNumber,
+              senderBankName: senderDetails.bankName,
+              senderBankCode: senderDetails.bankCode,
+              senderName: senderDetails.accountName,
+            },
+          },
+        }),
+        tx.transaction.create({
+          data: {
+            reference: `${receiptReference}-AGENT`,
+            merchantTxRef: company,
+            event: "payment.agent.credit",
+            status: "SUCCESS",
+            amount: agentAmount,
+            currency: "NGN",
+            channel: "wallet",
+            gatewayResponse: "Agent wallet credited",
+            customerEmail: agentWallet?.accountName || null,
+            paymentId: paymentRecord.id,
+            userId: company,
+            metadata: {
+              receipt,
+              role: "AGENT",
+              transactionType: "CREDIT",
+              creditedAmount: agentAmount,
+              senderAccountNumber: senderDetails.accountNumber,
+              senderBankName: senderDetails.bankName,
+              senderBankCode: senderDetails.bankCode,
+              senderName: senderDetails.accountName,
+            },
+          },
+        }),
+        tx.transaction.create({
+          data: {
+            reference: `${receiptReference}-SENDER`,
+            merchantTxRef: userId,
+            event: "payment.sender.debit",
+            status: "SUCCESS",
+            amount: grossAmount,
+            currency: "NGN",
+            channel: "wallet",
+            gatewayResponse: "Sender wallet debited",
+            customerEmail: senderWallet?.accountName || null,
+            paymentId: paymentRecord.id,
+            userId: senderWallet?.userId || userId,
+            metadata: {
+              receipt,
+              role: "SENDER",
+              transactionType: "DEBIT",
+              debitedAmount: grossAmount,
+              senderAccountNumber: senderDetails.accountNumber,
+              senderBankName: senderDetails.bankName,
+              senderBankCode: senderDetails.bankCode,
+              senderName: senderDetails.accountName,
+            },
+          },
+        }),
+        tx.transaction.create({
+          data: {
+            reference: `${receiptReference}-IT`,
+            merchantTxRef: technologyWallet?.userId || "URMSAD-U4XJ4RKVMU",
+            event: "payment.it.debit",
+            status: "SUCCESS",
+            amount: technologyAmount + fee,
+            currency: "NGN",
+            channel: "wallet",
+            gatewayResponse: "IT wallet credited",
+            customerEmail: senderWallet?.accountName || null,
+            paymentId: paymentRecord.id,
+            userId: "URMSAD-U4XJ4RKVMU",
+            metadata: {
+              receipt,
+              role: "IT",
+              transactionType: "CREDIT",
+              creditedAmount: technologyAmount + fee,
+              senderAccountNumber: senderDetails.accountNumber,
+              senderBankName: senderDetails.bankName,
+              senderBankCode: senderDetails.bankCode,
+              senderName: senderDetails.accountName,
+            },
+          },
+        }),
+      ]);
+
+      const paymentTransaction = await tx.paymentTransaction.create({
+        data: {
+          reference: `${receiptReference}-PAYMENT`,
+          userId,
+          pricingId: paymentRecord.payment,
+          companyId: company || null,
+          centerId: center || main.uid,
+          amount: grossAmount,
+          currency: "NGN",
+          paymentId: paymentRecord.id,
+          date: new Date(),
+          type: Number(updatedPayment.debt) > 0 ? "PART_PAYMENT" : "COMPLETE",
+          billing: paymentRecord.frequency || "MONTHLY",
+          status: "SUCCESS",
+          metadata: {
+            receipt,
+            paymentReference: paymentRecord.reference,
+            split: {
+              mainAmount,
+              agentAmount,
+              technologyAmount,
+              fee,
+            },
+          },
+        },
+      });
+
+      return { payment: updatedPayment, paymentTransaction };
+    });
+
+    return res.status(201).json({
+      ok: true,
+      message:
+        "Payment initiated, split and transfers initialized successfully",
+      data: {
+        payment: paymentResult.payment,
+        paymentTransaction: paymentResult.paymentTransaction,
+        amountBreakdown: {
+          grossAmount,
+          fee,
+          netAmount: totalAmount,
+        },
+        split: {
+          mainWallet: mainAmount ,
+          agentWallet: agentAmount,
+          technologyWallet: technologyAmount + fee,
+          breakdown: {
+            main: mainAmount,
+            agent: agentAmount,
+            technology: technologyAmount,
+          },
+        },
+        receipt,
+      },
+    });
+
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({
+      ok: false,
+      message: err?.message || "Server error",
+    });
+  }
+};
 export {
   createPayment,
   getPaymentsByUserId,
   getPaymentByReference,
+  getPaymentById,
   getAllPayments,
   verifyPayment,
   updatePaymentSchedule,
+  makePayment,
   createPaymentRecord,
   createRecurringPaymentForPayment,
   generatePaymentReference,
