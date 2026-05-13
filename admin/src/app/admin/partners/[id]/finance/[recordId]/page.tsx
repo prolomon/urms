@@ -339,8 +339,8 @@ function RecordDetailPage() {
                         <InfoCard label="Sender Name" value={sender?.accountName || "—"} />
                         <InfoCard label="Sender Bank" value={sender?.bankName || "—"} />
                         <InfoCard label="Sender Account Number" value={sender?.accountNumber || "—"} />
-                        <InfoCard label="Agent Recipient" value={recipients?.agent?.accountName || "—"} />
-                        <InfoCard label="Agent Bank" value={recipients?.agent?.bankName || "—"} />
+                        <InfoCard label="Partner Recipient" value={recipients?.agent?.accountName || "—"} />
+                        <InfoCard label="Partner Bank" value={recipients?.agent?.bankName || "—"} />
                         <InfoCard label="Admin Recipient" value={recipients?.admin?.accountName || "—"} />
                     </div>
                 </div>
@@ -350,7 +350,7 @@ function RecordDetailPage() {
                 <h3 className="mb-4 text-lg font-semibold text-slate-900">Additional Data</h3>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                     <InfoCard label="User ID" value={record.userId || "—"} />
-                    <InfoCard label="Company ID" value={record.companyId || "—"} />
+                    <InfoCard label="Partner ID" value={record.companyId || "—"} />
                     <InfoCard label="Center ID" value={record.centerId || "—"} />
                     <InfoCard label="Created At" value={formatDate(record.createdAt)} />
                     <InfoCard label="Updated At" value={formatDate(record.updatedAt)} />
