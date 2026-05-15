@@ -1,19 +1,19 @@
 {
   "services": {
     "api": {
-      "rootDirectory": "apps/api",
+      "rootDirectory": "server",
       "buildCommand": "npm install && npm run build",
       "startCommand": "npm run start:prod"
     },
-    "web": {
-      "rootDirectory": "apps/web",
+    "admin": {
+      "rootDirectory": "admin",
       "buildCommand": "npm install && npm run build",
       "startCommand": "npm run start"
     },
-    "worker": {
-      "rootDirectory": "apps/worker",
-      "buildCommand": "npm install",
-      "startCommand": "npm run worker"
+    "agent": {
+      "rootDirectory": "agent",
+      "buildCommand": "npm install && npm run build",
+      "startCommand": "npm run start"
     }
   }
 }
