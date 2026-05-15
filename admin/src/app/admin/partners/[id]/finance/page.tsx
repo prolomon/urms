@@ -3,7 +3,6 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
 import {
     ArrowDownLeft,
-    ArrowUpRight,
     CheckCircle2,
     Clock3,
     Download,
@@ -26,17 +25,15 @@ function PartnerFinancePage() {
     const router = useRouter();
     const params = useParams();
     const partnerId = params.id as string;
-    const { user } = useAuth();
 
     const [records, setRecords] = useState<PaymentTransaction[]>([]);
     const [wallet, setWallet] = useState<WalletType | null>(null);
-    const [loading, setLoading] = useState(false);
     const [loadingRecords, setLoadingRecords] = useState(false);
     const [query, setQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<string>("");
     const [typeFilter, setTypeFilter] = useState<string>("");
-    const [toDate, setToDate] = useState<Date>(() => new Date().toISOString().split("T")[0]);
-    const [fromDate, setFromDate] = useStat<Date>(() => new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]);
+    const [toDate, setToDate] = useState(() => new Date().toISOString().split("T")[0]);
+    const [fromDate, setFromDate] = useState(() => new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]);
 
     const [toasts, setToasts] = useState<{ id: number; type: string; message: string }[]>([]);
 
@@ -99,7 +96,7 @@ function PartnerFinancePage() {
         } finally {
             setLoadingRecords(false);
         }
-    }, [fromDate, partnerId, query, toDate]);
+    }, [partnerId, fromDate, toDate, query]);
 
     useEffect(() => {
         fetchRecords();
@@ -107,8 +104,8 @@ function PartnerFinancePage() {
 
     console.log(records);
 
-    const statusBadge = (status: TransactionStatus) => {
-        if (status === TransactionStatus.SUCCESS) {
+    const statusBadge = (status) => {
+        if (status === "SUCCESS") {
             return (
                 <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                     <CheckCircle2 className="h-3.5 w-3.5" />
@@ -117,7 +114,7 @@ function PartnerFinancePage() {
             );
         }
 
-        if (status === TransactionStatus.PENDING) {
+        if (status === "PENDING") {
             return (
                 <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
                     <Clock3 className="h-3.5 w-3.5" />
@@ -126,7 +123,7 @@ function PartnerFinancePage() {
             );
         }
 
-        if (status === TransactionStatus.REFUNDED) {
+        if (status === "REFUNDED") {
             return (
                 <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700">
                     <Clock3 className="h-3.5 w-3.5" />
@@ -241,7 +238,7 @@ function PartnerFinancePage() {
                         <button
                             type="button"
                             onClick={handleDownloadStatement}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg--emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg--emerald-800 transition-colors"
                         >
                             <Download className="h-4 w-4" />
                             Download Statement
@@ -337,7 +334,7 @@ function PartnerFinancePage() {
                 {loadingRecords ? (
                     <div className="flex items-center justify-center min-h-96">
                         <div className="flex flex-col items-center gap-3">
-                            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                            <Loader2 className="h-8 w-8 animate-spin text-emerald-700" />
                             <p className="text-slate-600">Loading payment records...</p>
                         </div>
                     </div>
@@ -351,7 +348,7 @@ function PartnerFinancePage() {
                                     <th className="py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Date</th>
                                     <th className="py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
                                     <th className="py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Amount</th>
-                                    <th className="py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Category</th>
+                                    <th className="py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Portion</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -365,32 +362,26 @@ function PartnerFinancePage() {
                                     records.map((record) => (
                                         <tr key={record.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition-colors">
                                             <td className="py-4 text-sm font-medium text-slate-800">
-                                                <Link href={`/admin/partners/${partnerId}/finance/${record.id}`} className="hover:text-blue-700">
+                                                <Link href={`/admin/partners/${partnerId}/finance/${record.reference}`} className="hover:text-blue-700">
                                                     {record.reference.slice(0, 27)}
                                                 </Link>
                                             </td>
                                             <td className="py-4 text-sm text-slate-600 capitalize">{record.type || "—"}</td>
                                             <td className="py-4 text-sm text-slate-600">
-                                                {new Date(record.createdAt).toLocaleString("en-NG", {
+                                                {new Date(record.createdAt).toLocaleDateString("en-NG", {
                                                     year: "numeric",
                                                     month: "short",
                                                     day: "numeric",
-                                                    hour: "2-digit",
-                                                    minute: "2-digit",
                                                 })}
                                             </td>
-                                            <td className="py-4 text-sm">{statusBadge(record.status)}</td>
-                                            <td className={`py-4 text-right text-sm font-semibold ${record.type === "CREDIT" ? "text-emerald-700" : "text-rose-700"}`}>
+                                            <td className="py-4">{statusBadge(record.status)}</td>
+                                            <td className={`py-4 text-right text-sm font-semibold text-emerald-700`}>
                                                 <span className="inline-flex items-center gap-1.5">
-                                                    {record.type === "CREDIT" ? (
-                                                        <ArrowDownLeft className="h-3.5 w-3.5" />
-                                                    ) : (
-                                                        <ArrowUpRight className="h-3.5 w-3.5" />
-                                                    )}
+                                                    <ArrowDownLeft className="h-3.5 w-3.5" />
                                                     {formatCurrency(record.amount)}
                                                 </span>
                                             </td>
-                                            <td className="py-4 text-right text-sm text-slate-600 capitalize">{record.category || "—"}</td>
+                                            <td className="py-4 text-right text-sm text-slate-600 font-bold">{record.metadata.receipt.breakdown.agent ? `₦${record.metadata.receipt.breakdown.agent}` : "—"}</td>
                                         </tr>
                                     ))
                                 )}

@@ -54,11 +54,18 @@ export type PaymentTransaction = {
     return data;
 }
 
-export async function getRecords(id: string, fromDate?: Date, toDate?: Date, query?: string): Promise<{ok: boolean;transactions?: PaymentTransaction[]; message?: string}> { 
+export async function getRecords(id: string, fromDate?: string, toDate?: string, query?: string): Promise<{ok: boolean;transactions?: PaymentTransaction[]; message?: string}> { 
     if (!id) {
         throw new Error("No user ID found");
     }
-    const response = await fetch(`${API_URL}/payment-transaction/user/company/${id}?fromDate=${fromDate?.toISOString()}&toDate=${toDate?.toISOString()}&query=${query}`, {
+    const params = new URLSearchParams();
+
+    if (fromDate) params.set("fromDate", fromDate);
+    if (toDate) params.set("toDate", toDate);
+    if (query) params.set("query", query);
+
+    const queryString = params.toString();
+    const response = await fetch(`${API_URL}/payment-transaction/user/company/${id}${queryString ? `?${queryString}` : ""}`, {
         headers: {...buildHeaders()},
     });
     const data = await response.json();
