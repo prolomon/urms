@@ -1,5 +1,9 @@
 {
-  "rootDirectory": "admin",
-  "buildCommand": "npm install && npm run build",
-  "startCommand": "npm run start"
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "buildCommand": "npm install && npm run build"
+  },
+  "deploy": {
+    "startCommand": "npm run start"
+  }
 }
