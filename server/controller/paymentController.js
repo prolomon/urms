@@ -702,7 +702,7 @@ const makePayment = async (req, res) => {
         where: { id: paymentRecord.id },
         data: {
           debt: paymentRecord.amount - totalAmount,
-          status: "SUCCESS",
+          status: "PENDING",
         },
       });
 
