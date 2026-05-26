@@ -37,7 +37,7 @@ jobs:
 
       # 🔥 THIS IS THE KEY STEP YOU WERE MISSING
       - name: Generate Android project (Expo prebuild)
-        run: npx expo prebuild --platform android --yes
+        run: npx expo prebuild --platform android
 
       - name: Make Gradle executable
         run: chmod +x android/gradlew
