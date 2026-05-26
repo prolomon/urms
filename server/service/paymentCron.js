@@ -35,15 +35,28 @@ export const startPaymentCron = () => {
       for (const member of members) {
         if (!member.pricing || member.pricing.length === 0) continue;
 
-        const upcoming = await prisma.payment.findFirst({
-          where: {
-            userId: member.uid,
-            due: { gte: new Date() },
-          },
-          select: { id: true },
+        // Find the latest payment for the member (by due date)
+        const latestPayment = await prisma.payment.findFirst({
+          where: { userId: member.uid },
+          orderBy: { due: 'desc' },
+          select: { id: true, due: true },
         });
 
-        if (upcoming) continue; // already has an upcoming payment
+        // If they have a future/upcoming payment (not yet due) => skip
+        if (latestPayment && new Date(latestPayment.due) > new Date()) {
+          continue; // already has an upcoming payment
+        }
+
+        // If the gap between now and the latest due date is more than 1 day, skip seeding
+        // (only seed when the most recent due date is within the last 24 hours or missing)
+        if (latestPayment) {
+          const diffMs = Date.now() - new Date(latestPayment.due).getTime();
+          const oneDayMs = 24 * 60 * 60 * 1000;
+          if (diffMs > oneDayMs) {
+            // gap is greater than one day, do not auto-seed
+            continue;
+          }
+        }
 
         // find first active pricing
         let selectedPricing = null;

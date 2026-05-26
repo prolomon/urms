@@ -98,6 +98,8 @@ export default function MakePayment() {
     }
   }, [currentUser?.uid, token, failed]);
 
+  console.log("Fetched payments:", allPayments);
+
   useEffect(() => {
     fetchPayments();
   }, [fetchPayments]);
@@ -206,7 +208,7 @@ export default function MakePayment() {
             {sortedPayments.map((payment, index) => {
 
               const pricingInfo = pricing.find((item) => item.id === payment.payment)
-              const isPayable = payment.status.toLowerCase() !== "success" && Number(payment.debt) <= payment.amount;
+              const isPayable = payment.status.toLowerCase() !== "success";
               const statusLabel = payment.status.charAt(0).toUpperCase() + payment.status.slice(1).toLowerCase();
 
               return (
