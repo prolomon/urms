@@ -14,7 +14,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: apps/mobile-app
+        working-directory: apps/
 
     steps:
       - name: Checkout repo
@@ -46,4 +46,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: apps/mobile-app/android/app/build/outputs/apk/release/app-release.apk
+          path: app/android/app/build/outputs/apk/release/app-release.apk
