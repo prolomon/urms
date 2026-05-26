@@ -2,9 +2,7 @@ name: Mobile APK Build
 
 on:
   push:
-    branches:
-      - main
-
+    branches: [main]
     paths:
       - 'app/**'
 
@@ -28,11 +26,18 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Setup Expo CLI
+        run: npm install -g expo-cli
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
+
+      # 🔥 THIS IS THE KEY STEP YOU WERE MISSING
+      - name: Generate Android project (Expo prebuild)
+        run: npx expo prebuild --platform android --yes
 
       - name: Make Gradle executable
         run: chmod +x android/gradlew
