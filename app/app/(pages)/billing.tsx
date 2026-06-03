@@ -253,7 +253,7 @@ export default function MakePayment() {
                     </View>
                   </View>
 
-                  {isPayable ? (
+                  {/* {isPayable ? ( */}
                     <TouchableOpacity
                       style={styles.payNowButton}
                       activeOpacity={0.85}
@@ -265,7 +265,7 @@ export default function MakePayment() {
                     >
                       <Text style={styles.payNowText}>{loading ? "Processing..." : "Pay now"}</Text>
                     </TouchableOpacity>
-                  ) : null}
+                  {/* ) : null} */}
                 </View>
               );
             })}
