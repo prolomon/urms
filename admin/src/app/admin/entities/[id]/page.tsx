@@ -225,6 +225,8 @@ export default function EntityDetailsPage({ params }) {
     }
   }, [customerCode])
 
+  console.log(wallet)
+
   useEffect(() => {
     fetchWalletData();
   }, [fetchWalletData])

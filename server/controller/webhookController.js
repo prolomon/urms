@@ -17,15 +17,19 @@ const nombaWebhook = async (req, res) => {
     }
 
     const txn = event.data?.transaction || {};
-    const merchant = event.data?.merchant || {};
-    const aliasRef = txn?.aliasAccountReference || txn?.aliasAccountNumber || null;
-    const amount = Number(txn?.transactionAmount ?? 0);
-    const fee = Number(txn?.fee ?? 0);
-    const merchantUserId = merchant?.userId || null;
+    const merchant = txn?.merchant || {};
+    
+    // Nomba structure varies: fields can be in txn root or nested in merchant
+    const aliasRef = txn?.aliasAccountReference || merchant?.aliasAccountReference || txn?.aliasAccountNumber || merchant?.aliasAccountNumber || null;
+    const amount = Number(txn?.transactionAmount || merchant?.transactionAmount || 0);
+    const fee = Number(txn?.fee || merchant?.fee || 0);
+    const merchantUserId = merchant?.userId || txn?.userId || null;
     const walletId = merchant?.walletId || null;
-    const senderDetails = event.data?.customer || {};
-    const customerEmail = event.data?.customer?.email || null;
-    const transactionReference = txn?.transactionId || `nomba-${Date.now()}`;
+    const senderDetails = txn?.customer || event.data?.customer || {};
+    const customerEmail = senderDetails?.email || null;
+    const transactionReference = txn?.transactionId || merchant?.transactionId || `nomba-${Date.now()}`;
+
+    console.log('Extracted data - AliasRef:', aliasRef, 'Amount:', amount, 'MerchantUserId:', merchantUserId);
 
     if (!aliasRef) {
       return res.status(400).json({ ok: false, message: 'Missing identifying information (aliasRef)' });
@@ -42,10 +46,11 @@ const nombaWebhook = async (req, res) => {
       wallet = await prisma.wallet.findFirst({
         where: {      
           OR: [
-            { accountNo: txn?.aliasAccountNumber },
-            { accountName: txn?.aliasAccountName },
+            { userId: aliasRef }, // Most reliable: matches Member/Agent UID
+            { accountNo: txn?.aliasAccountNumber || merchant?.aliasAccountNumber },
+            { accountName: txn?.aliasAccountName || merchant?.aliasAccountName },
             { identification: aliasRef },
-            { bank: { path: ['id'], equals: txn?.aliasAccountReference } },
+            { bank: { path: ['id'], equals: aliasRef } },
           ],
         },
       });
@@ -78,8 +83,8 @@ const nombaWebhook = async (req, res) => {
             senderBankName: senderDetails.bankName || null,
             senderBankCode: senderDetails.bankCode || null,
             senderName: senderDetails.senderName || null,
-            aliasAccountNumber: txn?.aliasAccountNumber || null,
-            aliasAccountName: txn?.aliasAccountName || null,
+            aliasAccountNumber: txn?.aliasAccountNumber || merchant?.aliasAccountNumber || null,
+            aliasAccountName: txn?.aliasAccountName || merchant?.aliasAccountName || null,
             aliasAccountReference: aliasRef,
             aliasAccountType: txn?.aliasAccountType || null,
             sessionId: txn?.sessionId || null,
@@ -134,8 +139,8 @@ const nombaWebhook = async (req, res) => {
           senderBankName: senderDetails.bankName || null,
           senderBankCode: senderDetails.bankCode || null,
           senderName: senderDetails.senderName || null,
-          aliasAccountNumber: txn?.aliasAccountNumber || null,
-          aliasAccountName: txn?.aliasAccountName || null,
+          aliasAccountNumber: txn?.aliasAccountNumber || merchant?.aliasAccountNumber || null,
+          aliasAccountName: txn?.aliasAccountName || merchant?.aliasAccountName || null,
           aliasAccountReference: aliasRef,
           aliasAccountType: txn?.aliasAccountType || null,
           sessionId: txn?.sessionId || null,
