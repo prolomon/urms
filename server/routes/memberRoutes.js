@@ -35,7 +35,7 @@ router.post('/verify-security-code/:id', authMiddleware, roleMiddleware(['user',
 router.post('/', createMember);
 router.get('/:id/center', authMiddleware, roleMiddleware(['user', "admin"]), getMembers);
 router.get('/agent/:agentId', authMiddleware, roleMiddleware(['admin']), getMembersByAgentId);
-router.get('/company/:companyId', authMiddleware, roleMiddleware(['admin']), getMembersByCompanyId);
+router.get('/company/:companyId', authMiddleware, roleMiddleware(['admin', 'partner']), getMembersByCompanyId);
 router.put('/change-agent', authMiddleware, roleMiddleware(['admin']), changeMemberAgent);
 router.put('/change-company', authMiddleware, roleMiddleware(['admin']), changeMemberCompany);
 router.get('/:id', authMiddleware, roleMiddleware(['user', "admin"]), getMember);

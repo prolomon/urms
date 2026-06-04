@@ -32,7 +32,7 @@ function Home() {
     const loadData = async () => {
       try {
         // fetch members (get a larger page so we can build distribution)
-        const memberData = await getMembersByCompanyId(1, 1000, user.uid);
+        const memberData = await getMembersByCompanyId(1, 100, user.uid);
         if (isCancelled) return;
         const membersList = memberData?.data || [];
         const totalEntities = memberData?.meta?.total ?? membersList.length;
@@ -115,6 +115,8 @@ function Home() {
       isCancelled = true;
     };
   }, [user.center, user.uid, userId]);
+
+  console.log(user);
 
   // // derive revenueData (last 12 months) from payments
   const revenueDataFromPayments = React.useMemo(() => {

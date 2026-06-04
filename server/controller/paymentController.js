@@ -556,7 +556,7 @@ const makePayment = async (req, res) => {
         },
       }),
       prisma.wallet.findFirst({
-        where: { userId: company, role: "ADMIN" },
+        where: { userId: center, role: "ADMIN" },
         select: {
           id: true,
           userId: true,

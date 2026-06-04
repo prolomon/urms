@@ -9,10 +9,12 @@ import { getAllPayments } from "@/lib/api";
 import { getMembers } from "@/lib/services/member";
 import { getPricingByCenter } from "@/lib/services/pricing";
 import { useAuth } from "@/context/AuthContext";
+import {useWallet} from "@/context/WalletContext";
 import { getCompanies } from "@/lib/services/company";
 
 function Home() {
   const { user } = useAuth();
+  const { wallet } = useWallet();
   const userId = user?.uid;
   const [isLive, setIsLive] = useState(true);
   const [members, setMembers] = useState([]);
@@ -25,6 +27,8 @@ function Home() {
     paymentRate: 0,
     companies: 0,
   });
+
+  console.log("Wallet data:", wallet);
 
   useEffect(() => {
     let isCancelled = false;
@@ -221,7 +225,7 @@ function Home() {
         />
         <KPI
           title="Monthly Revenue"
-          value={`₦${totals.monthlyRevenue.toLocaleString()}`}
+          value={`₦${wallet?.balance?.toLocaleString()}`}
           meta="Current month"
           colorClass="text-emerald-600"
         />

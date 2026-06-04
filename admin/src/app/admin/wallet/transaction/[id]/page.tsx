@@ -174,7 +174,7 @@ function TransactionDetailPage() {
 
     const getTransactionTypeIcon = (type: string) => {
         const normalizedType = (type || "").toLowerCase();
-        return normalizedType === "nomba.payment.credit" ? (
+        return normalizedType === "payment.admin.credit" ? (
             <ArrowDownLeft className="h-5 w-5 text-emerald-600" />
         ) : (
             <ArrowUpRight className="h-5 w-5 text-rose-600" />
@@ -229,7 +229,7 @@ function TransactionDetailPage() {
     }
 
     const transactionType = (transaction.event || "").toLowerCase();
-    const isCredit = transactionType === "nomba.payment.credit";
+    const isCredit = transactionType === "payment.admin.credit";
 
     return (
         <div className="mx-auto max-w-7xl p-4 md:p-6 space-y-4 md:space-y-5">

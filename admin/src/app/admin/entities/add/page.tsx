@@ -258,6 +258,8 @@ export default function AddEntityPage() {
                 company: selectedCompany?.uid || "",
             };
 
+            console.log(payload)
+
             const res = await createMember(payload as Member);
 
             if (!res?.ok) {
@@ -287,8 +289,6 @@ export default function AddEntityPage() {
 
         return Array.from(uniquePricing.values());
     };
-
-    console.log(pricingOptions, formData.category, getFilteredPricing());
 
     if (loading) {
         return (

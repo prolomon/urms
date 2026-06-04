@@ -16,7 +16,7 @@ import { getMembers } from "@/lib/services/member";
 
 export default function PaymentSplit() {
   const { user, update, uid } = useAuth();
-
+ 
   const defaultSplits = [
     { key: "main", name: "Main Account", value: 70, color: "#10b981" },
     { key: "agent", name: "Agent Commission", value: 15, color: "#3b82f6" },

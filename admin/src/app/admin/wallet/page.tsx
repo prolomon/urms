@@ -68,6 +68,8 @@ function WalletPage() {
         }
     }, [router, wallet, setUid, user?.uid]);
 
+    console.log("Wallet data:", wallet);
+
     //this id for the bank details 
     const bankDetails = {
         bankName: wallet?.bank?.name || "Not available",
@@ -393,16 +395,16 @@ function WalletPage() {
                                         </td>
                                         <td className="py-4 text-sm">{statusBadge(item.status)}</td>
                                         <td
-                                            className={`py-4 text-right text-sm font-semibold ${(item.event || "").toLowerCase() === "nomba.payment.credit" ? "text-emerald-700" : "text-rose-700"
+                                            className={`py-4 text-right text-sm font-semibold ${(item.event || "").toLowerCase() === "payment.admin.credit" ? "text-emerald-700" : "text-rose-700"
                                                 }`}
                                         >
                                             <span className="inline-flex items-center gap-1.5">
-                                                {(item.event || "").toLowerCase() === "nomba.payment.credit" ? (
+                                                {(item.event || "").toLowerCase() === "payment.admin.credit" ? (
                                                     <ArrowDownLeft className="h-4 w-4" />
                                                 ) : (
                                                     <ArrowUpRight className="h-4 w-4" />
                                                 )}
-                                                {(item.event || "").toLowerCase() === "nomba.payment.credit" ? "+" : "-"}
+                                                {(item.event || "").toLowerCase() === "payment.admin.credit" ? "+" : "-"}
                                                 {formatCurrency(Math.abs(Number(item.amount || 0)))}
                                             </span>
                                         </td>

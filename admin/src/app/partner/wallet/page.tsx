@@ -398,16 +398,16 @@ function WalletPage() {
                                                 </td>
                                                 <td className="py-4 text-sm">{statusBadge((String(item.status || "")).toUpperCase() as WalletTransactionStatus)}</td>
                                                 <td
-                                                    className={`py-4 text-right text-sm font-semibold ${(String(item.event || "")).toLowerCase() === "credit" ? "text-emerald-700" : "text-rose-700"
+                                                    className={`py-4 text-right text-sm font-semibold ${(String(item.event || "")).toLowerCase() === "payment.company.credit" ? "text-emerald-700" : "text-rose-700"
                                                         }`}
                                                 >
                                                     <span className="inline-flex items-center gap-1.5">
-                                                        {(String(item.event || "")).toLowerCase() === "credit" ? (
+                                                        {(String(item.event || "")).toLowerCase() === "payment.company.credit" ? (
                                                             <ArrowDownLeft className="h-4 w-4" />
                                                         ) : (
                                                             <ArrowUpRight className="h-4 w-4" />
                                                         )}
-                                                        {(String(item.event || "")).toLowerCase() === "credit" ? "+" : "-"}
+                                                        {(String(item.event || "")).toLowerCase() === "payment.company.credit" ? "+" : "-"}
                                                         {formatCurrency(Number(item.amount || 0))}
                                                     </span>
                                                 </td>
