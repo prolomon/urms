@@ -55,7 +55,7 @@ const nombaWebhook = async (req, res) => {
         },
       });
 
-      console.log('Strategy 3 (alias/reference fallback):', WritableStreamDefaultController);
+      console.log('Strategy 3 (alias/reference fallback):', wallet);
     }
 
     if (!wallet) {
