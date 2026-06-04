@@ -55,7 +55,7 @@ const nombaWebhook = async (req, res) => {
         },
       });
 
-      console.log('Strategy 3 (alias/reference fallback):', wallet ? 'Found' : 'Not found');
+      console.log('Strategy 3 (alias/reference fallback):', WritableStreamDefaultController);
     }
 
     if (!wallet) {
@@ -110,7 +110,7 @@ const nombaWebhook = async (req, res) => {
     const newBalance = Number(wallet.balance ?? 0) + Number(amount - fee);
 
     const updatedWallet = await prisma.wallet.update({
-      where: { id: wallet.id },
+      where: { userId: aliasRef },
       data: { balance: newBalance },
     });
 
