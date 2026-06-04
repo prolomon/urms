@@ -614,7 +614,7 @@ const makePayment = async (req, res) => {
       }),
       prisma.wallet.findFirst({
         where: {
-          userId: "URMSAD-U4XJ4RKVMU",
+          userId: "URMSAD-ZWKN67CO79",
           role: "ADMIN",
         },
         select: {
@@ -667,6 +667,8 @@ const makePayment = async (req, res) => {
     const totalAmount = grossAmount - fee;
     const receiptReference = generateTransactionReference();
 
+    console.log(grossAmount, fee, totalAmount);
+
     if (senderWallet && Number(senderWallet.balance) < grossAmount) {
       return res
         .status(400)
@@ -702,7 +704,7 @@ const makePayment = async (req, res) => {
         where: { id: paymentRecord.id },
         data: {
           debt: paymentRecord.amount - totalAmount,
-          status: "PENDING",
+          status: paymentRecord.amount === totalAmount ? paymentRecord.due === totalAmount ? "COMPLETED" : "PENDING" : "PENDING",
         },
       });
 
@@ -840,7 +842,7 @@ const makePayment = async (req, res) => {
         tx.transaction.create({
           data: {
             reference: `${receiptReference}-IT`,
-            merchantTxRef: technologyWallet?.userId || "URMSAD-U4XJ4RKVMU",
+            merchantTxRef: technologyWallet?.userId || "URMSAD-ZWKN67CO79",
             event: "payment.it.debit",
             status: "SUCCESS",
             amount: technologyAmount + fee,
@@ -849,7 +851,7 @@ const makePayment = async (req, res) => {
             gatewayResponse: "IT wallet credited",
             customerEmail: senderWallet?.accountName || null,
             paymentId: paymentRecord.id,
-            userId: "URMSAD-U4XJ4RKVMU",
+            userId: "URMSAD-ZWKN67CO79",
             metadata: {
               receipt,
               role: "IT",

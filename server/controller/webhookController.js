@@ -44,15 +44,7 @@ const nombaWebhook = async (req, res) => {
 
     if (aliasRef) {
       wallet = await prisma.wallet.findFirst({
-        where: {      
-          OR: [
-            { userId: aliasRef }, // Most reliable: matches Member/Agent UID
-            { accountNo: txn?.aliasAccountNumber || merchant?.aliasAccountNumber },
-            { accountName: txn?.aliasAccountName || merchant?.aliasAccountName },
-            { identification: aliasRef },
-            { bank: { path: ['id'], equals: aliasRef } },
-          ],
-        },
+        where: { userId: aliasRef }
       });
 
       console.log('Strategy 3 (alias/reference fallback):', wallet);

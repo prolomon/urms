@@ -435,21 +435,8 @@ const loginCompany = async (req, res) => {
     const company = await prisma.company.findUnique({
       where: { email },
       select: {
-        id: true,
-        uid: true,
-        name: true,
-        email: true,
+        ...companySafeSelect,
         password: true,
-        avatar: true,
-        role: true,
-        phone: true,
-        center: true,
-        status: true,
-        secureToken: true,
-        accountCode: true,
-        location: true,
-        createdAt: true,
-        updatedAt: true,
       },
     });
 

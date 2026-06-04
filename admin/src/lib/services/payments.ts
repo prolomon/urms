@@ -88,3 +88,14 @@ export async function getRecord(id: string): Promise<{ok: boolean; transaction?:
     }
     return data;
 }
+
+export const getTransactions = async (page: number, limit: number) => {
+    const response = await fetch(`${API_URL}/payment-transaction/?page=${page}&limit=${limit}`, {
+        headers: {...buildHeaders()},
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || "Failed to fetch transactions");
+    }
+    return data;
+}
