@@ -35,7 +35,6 @@ function Home() {
       try {
 
         const walletRes = await getWallet(userId, "COMPANY");
-        console.log(walletRes)
         setWallet(walletRes);
 
         // fetch members (get a larger page so we can build distribution)
@@ -102,13 +101,6 @@ function Home() {
           paymentRate,
           agents: totalAgents,
         });
-        console.log(
-          "Data loaded",
-          totalEntities,
-          monthly,
-          paymentRate,
-          totalAgents,
-        );
       } catch (error) {
         if (!isCancelled) {
           console.error("Failed to fetch data", error);
@@ -122,8 +114,6 @@ function Home() {
       isCancelled = true;
     };
   }, [user.center, user.uid, userId]);
-
-  console.log(user, wallet, members.length, payments.length, agents.length, pricing.length);
 
   // // derive revenueData (last 12 months) from payments
   const revenueDataFromPayments = React.useMemo(() => {

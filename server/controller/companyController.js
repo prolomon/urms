@@ -70,7 +70,7 @@ const createCompany = async (req, res) => {
       });
     }
 
-    const existing = await prisma.company.findUnique({
+    const existing = await prisma.company.findFirst({
       where: { email: value.email },
       select: { id: true },
     });
@@ -226,7 +226,7 @@ const getCompaniesByCenter = async (req, res) => {
 
 const getCompany = async (req, res) => {
   try {
-    const company = await prisma.company.findUnique({
+    const company = await prisma.company.findFirst({
       where: { uid: String(req.params.uid) },
       select: companySafeSelect,
     });
@@ -317,7 +317,7 @@ const resetPassword = async (req, res) => {
   try {
     const companyUid = String(req.params.uid);
 
-    const company = await prisma.company.findUnique({
+    const company = await prisma.company.findFirst({
       where: { uid: companyUid },
       select: { uid: true, email: true, name: true },
     });
@@ -366,7 +366,7 @@ const changePassword = async (req, res) => {
 
     const companyUid = String(req.params.uid);
 
-    const company = await prisma.company.findUnique({
+    const company = await prisma.company.findFirst({
       where: { uid: companyUid },
       select: { uid: true, password: true },
     });
@@ -432,7 +432,7 @@ const loginCompany = async (req, res) => {
     req.connection.remoteAddress ||
     req.socket.remoteAddress 
 
-    const company = await prisma.company.findUnique({
+    const company = await prisma.company.findFirst({
       where: { email },
       select: {
         ...companySafeSelect,

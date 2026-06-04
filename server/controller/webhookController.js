@@ -44,7 +44,7 @@ const nombaWebhook = async (req, res) => {
 
     if (aliasRef) {
       wallet = await prisma.wallet.findFirst({
-        where: { userId: aliasRef }
+        where: { userId: aliasRef },
       });
 
       console.log('Strategy 3 (alias/reference fallback):', wallet);

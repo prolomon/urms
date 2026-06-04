@@ -28,8 +28,6 @@ function Home() {
     companies: 0,
   });
 
-  console.log("Wallet data:", wallet);
-
   useEffect(() => {
     let isCancelled = false;
 
@@ -225,7 +223,7 @@ function Home() {
         />
         <KPI
           title="Monthly Revenue"
-          value={`₦${wallet?.balance?.toLocaleString()}`}
+          value={`₦${wallet?.balance?.toLocaleString() || "0.00"}`}
           meta="Current month"
           colorClass="text-emerald-600"
         />
