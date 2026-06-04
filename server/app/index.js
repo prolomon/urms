@@ -53,7 +53,7 @@ app.set("trust proxy", 1);
 // Middleware
 app.use(
   cors({
-    origin: "*",
+    origin: ['http://localhost:3000', 'https://urms.up.railway.app', 'https://www.urms.up.railway.app', 'http://urms-server.up.railway.app', 'http://www.urms-server.up.railway.app'],
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: false,

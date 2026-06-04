@@ -102,7 +102,7 @@ const nombaWebhook = async (req, res) => {
     const newBalance = Number(wallet.balance ?? 0) + Number(amount - fee);
 
     const updatedWallet = await prisma.wallet.update({
-      where: { userId: aliasRef },
+      where: { id: wallet.id },
       data: { balance: newBalance },
     });
 
