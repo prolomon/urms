@@ -1,19 +1,5 @@
 {
-  "services": {
-    "api": {
-      "rootDirectory": "server",
-      "buildCommand": "npm install && npm run build",
-      "startCommand": "npm run start:prod"
-    },
-    "admin": {
-      "rootDirectory": "admin",
-      "buildCommand": "npm install && npm run build",
-      "startCommand": "npm run start"
-    },
-    "agent": {
-      "rootDirectory": "agent",
-      "buildCommand": "npm install && npm run build",
-      "startCommand": "npm run start"
-    }
-  }
+  "rootDirectory": "admin",
+  "buildCommand": "npm install && npm run build",
+  "startCommand": "npm run start"
 }

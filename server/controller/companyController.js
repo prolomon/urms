@@ -114,6 +114,7 @@ const createCompany = async (req, res) => {
         status: value.status ?? true,
         center: value.center,
         role: value.role || "COMPANY",
+        accountCode: value.accountCode,
         location: value.location,
         category: value.category,
       },
@@ -437,6 +438,15 @@ const loginCompany = async (req, res) => {
       select: {
         ...companySafeSelect,
         password: true,
+        avatar: true,
+        role: true,
+        phone: true,
+        center: true,
+        status: true,
+        accountCode: true,
+        location: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
 
