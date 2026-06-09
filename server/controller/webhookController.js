@@ -2,7 +2,30 @@ import crypto from "crypto";
 // import { recordWebhookTransaction } from "./transactionController.js";
 import { prisma } from "../config/db.js";
 
+function verifySignature(secret, rawBody, signatureHeader) {
+  const computedSignature = crypto
+    .createHmac('sha256', secret)
+    .update(rawBody, 'utf8')
+    .digest('hex');
+
+  return crypto.timingSafeEqual(
+    Buffer.from(computedSignature, 'utf8'),
+    Buffer.from(signatureHeader, 'utf8')
+  );
+}
+
 const nombaWebhook = async (req, res) => {
+
+  const signature = req.headers['x-nomba-signature'];
+  const secret = process.env.NOMBA_PRIVATE_SECRET;
+
+  if (!verifySignature(secret, req.rawBody, signature)) {
+    return res.status(401).send('Invalid signature');
+  }
+
+  // ✅ Signature verified
+  console.log('Webhook verified');
+  
   try {
     const event = req.body;
     console.log('Nomba webhook received:', JSON.stringify(event, null, 2));
