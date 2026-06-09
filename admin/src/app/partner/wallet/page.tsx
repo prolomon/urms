@@ -10,7 +10,6 @@ import {
     Filter,
     Search,
     Wallet,
-    X,
     XCircle,
 } from "lucide-react";
 import withPartnerAuth from "@/components/withPartnerAuth";
@@ -20,40 +19,62 @@ type WalletTransactionType = "credit" | "debit";
 import { usePartner } from "@/context/PartnerContext";
 import { useWallet } from "@/context/WalletContext";
 import { useRouter } from "next/navigation";
-import { Transaction, TransactionStatus } from "@/lib/services/wallet";
+import { Transaction, TransactionStatus, getWallet } from "@/lib/services/wallet";
 
 function WalletPage() {
     const router = useRouter();
     const [query, setQuery] = useState("");
-    const [statusFilter, setStatusFilter] = useState<"all" | WalletTransactionStatus>("all");
-    const [typeFilter, setTypeFilter] = useState<"all" | WalletTransactionType>("all");
+    const [statusFilter, setStatusFilter] = useState<string>("");
+    const [typeFilter, setTypeFilter] = useState<string>("");
     const [copyMessage, setCopyMessage] = useState("");
     const { user } = usePartner();
-    const { wallet, isWallet, loading, error, message, refresh, setUid, getTransactions } = useWallet();
+    const { error, message, getTransactions } = useWallet();
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [toDate, setToDate] = useState(() => new Date().toISOString().split("T")[0]);
     const [fromDate, setFromDate] = useState(() =>
         new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
     );
     const [load, setLoad] = useState(false);
+    const [wallet, setWallet] = useState<any>(null);
+
+    const fetchWallet = useCallback(async () => {
+        if (user?.uid) {
+            try {
+                const walletData = await getWallet(user.uid, "COMPANY");
+                setWallet(walletData?.wallet || null);
+            }
+
+            catch (error) {
+                console.error("Error fetching wallet data:", error);
+                setWallet(null);
+            }
+
+        }
+    }, [user?.uid]);
+
+    useEffect(() => {
+        fetchWallet();
+    }, [fetchWallet]);
 
     const fetChTransactions = useCallback(async () => {
-        const userId = user?.uid || wallet?.userId || wallet?.id;
-        if (!userId) return;
         setLoad(true);
-        try {
-            const res = await getTransactions(userId);
-            const results =
-                res.transactions?.data?.results || res.transactions?.data || res.transactions || [];
-            const items = Array.isArray(results) ? results : results.results || [];
-            setTransactions(items as Transaction[]);
-        } catch (error) {
-            console.error("Error fetching transactions:", error);
-            setTransactions([]);
-        } finally {
-            setLoad(false);
+        if (wallet) {
+            try {
+                const res = await getTransactions(user.uid, 1, 100, fromDate, toDate, query, typeFilter, statusFilter);
+
+                if (res.transactions) {
+                    setTransactions(res.transactions);
+                } else {
+                    setTransactions([]);
+                }
+            } catch (error) {
+                console.error("Error fetching transactions:", error);
+                setTransactions([]);
+            } finally {
+                setLoad(false);
+            }
         }
-    }, [wallet, getTransactions, user?.uid]);
+    }, [wallet, getTransactions, user.uid, fromDate, toDate, query, typeFilter, statusFilter]);
 
     useEffect(() => {
         fetChTransactions();
@@ -75,34 +96,23 @@ function WalletPage() {
 
     // This is for the balance calculations, we can connect this to the backend later
     const balances = useMemo(() => {
-        const statusToString = (s: any) => {
-            if (s == null) return "";
-            if (typeof s === "number") return TransactionStatus[s] ?? String(s);
-            return String(s);
-        };
+        // Map split data from metadata for every transaction (Admin logic)
+        const mapped = transactions.map((item: any) => {
+            const amount = Number(item.amount || 0);
+            const mainAmount = Number(item.metadata?.split?.mainAmount || item.metadata?.receipt?.breakdown?.main || 0);
+            const agentAmount = Number(item.metadata?.split?.agentAmount || item.metadata?.receipt?.breakdown?.agent || 0);
+            const techAmount = Number(item.metadata?.split?.technologyAmount || item.metadata?.receipt?.breakdown?.technology || 0);
+            const net = Number(item.metadata?.receipt?.netAmount || amount);
+            return { ...item, mainAmount, agentAmount, techAmount, net };
+        });
 
-        const successfulCredits = transactions
-            .filter((item) => (String(item.event || "")).toLowerCase() === "credit" && statusToString(item.status).toLowerCase() === "success")
-            .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-
-        const successfulDebits = transactions
-            .filter((item) => (String(item.event || "")).toLowerCase() === "debit" && statusToString(item.status).toLowerCase() === "success")
-            .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-
-        const pendingDebits = transactions
-            .filter((item) => (String(item.event || "")).toLowerCase() === "debit" && statusToString(item.status).toLowerCase() === "pending")
-            .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-
+        // available is gotten from the wallet object specifically as requested
         const walletBalance = Number(wallet?.balance ?? 0);
         const available = Number.isFinite(walletBalance) ? walletBalance : 0;
-        const ledger = available - pendingDebits;
 
         return {
             available,
-            ledger,
-            pendingDebits,
-            totalInflow: successfulCredits,
-            totalOutflow: successfulDebits,
+            ledger: available,
         };
     }, [wallet?.balance, transactions]);
 
@@ -189,14 +199,7 @@ function WalletPage() {
                         </p>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-3">
-                        {!isWallet ? (<button
-                            type="button"
-                            onClick={refresh}
-                            disabled={loading}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors disabled:cursor-not-allowed disabled:bg-emerald-300 cursor-pointer"
-                        >
-                            {loading ? "Please wait..." : "Get Account Number"}
-                        </button>) : (
+                        {wallet && (
                             <>
                                 <button
                                     type="button"
@@ -205,18 +208,11 @@ function WalletPage() {
                                 >
                                     Copy Details
                                 </button>
-                                <button
-                                    type="button"
-                                    onClick={() => router.push("/partner/wallet/transfer")}
-                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors disabled:cursor-not-allowed disabled:bg-emerald-300"
-                                >
-                                    Transfer
-                                </button>
                             </>
                         )}
                     </div>
                 </div>
-                {isWallet && (
+                {wallet && (
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-100">
                             <p className="text-xs uppercase tracking-wide text-slate-500">Bank Name</p>
@@ -256,19 +252,7 @@ function WalletPage() {
                 <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-100 shadow-sm">
                     <p className="text-xs uppercase tracking-wide text-slate-500">Ledger Balance</p>
                     <p className="mt-2 text-2xl font-bold text-slate-900">{formatCurrency(balances.ledger)}</p>
-                    <p className="text-xs text-slate-500 mt-1">Includes pending wallet movements</p>
-                </div>
-                <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-100 shadow-sm">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Pending Debits</p>
-                    <p className="mt-2 text-2xl font-bold text-amber-600">{formatCurrency(balances.pendingDebits)}</p>
-                    <p className="text-xs text-slate-500 mt-1">Waiting for settlement confirmation</p>
-                </div>
-                <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-100 shadow-sm">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Net Movement</p>
-                    <p className="mt-2 text-2xl font-bold text-slate-900">
-                        {formatCurrency(balances.totalInflow - balances.totalOutflow)}
-                    </p>
-                    <p className="text-xs text-slate-500 mt-1">Success credits minus success debits</p>
+                    <p className="text-xs text-slate-500 mt-1">Accumulated administrator allocation</p>
                 </div>
             </div>
 
@@ -372,47 +356,57 @@ function WalletPage() {
                                 <th className="py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Type</th>
                                 <th className="py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Date</th>
                                 <th className="py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                                <th className="py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Channel</th>
                                 <th className="py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Amount</th>
                             </tr>
                         </thead>
                         <tbody>
                             {transactions.length === 0 ? (
                                 <tr>
-                                    <td className="py-8 text-center text-sm text-slate-500" colSpan={5}>
+                                    <td className="py-8 text-center text-sm text-slate-500" colSpan={6}>
                                         No transactions match your filters.
                                     </td>
                                 </tr>
                             ) : (
-                                transactions.map((item) => (
-                                    <tr key={item.id} className="border-b border-slate-100 last:border-b-0">
-                                                <td className="py-4 text-sm font-medium text-slate-800"><Link href={`/partner/wallet/transaction/${item.id}`}>{item.reference || item.id}</Link></td>
-                                                <td className="py-4 text-sm text-slate-600">{item.event || "—"}</td>
-                                                <td className="py-4 text-sm text-slate-600">
-                                                    {new Date(String(item.createdAt || item.updatedAt)).toLocaleString("en-NG", {
-                                                        year: "numeric",
-                                                        month: "short",
-                                                        day: "numeric",
-                                                        hour: "2-digit",
-                                                        minute: "2-digit",
-                                                    })}
-                                                </td>
-                                                <td className="py-4 text-sm">{statusBadge((String(item.status || "")).toUpperCase() as WalletTransactionStatus)}</td>
-                                                <td
-                                                    className={`py-4 text-right text-sm font-semibold ${(String(item.event || "")).toLowerCase() === "credit" ? "text-emerald-700" : "text-rose-700"
-                                                        }`}
-                                                >
-                                                    <span className="inline-flex items-center gap-1.5">
-                                                        {(String(item.event || "")).toLowerCase() === "credit" ? (
-                                                            <ArrowDownLeft className="h-4 w-4" />
-                                                        ) : (
-                                                            <ArrowUpRight className="h-4 w-4" />
-                                                        )}
-                                                        {(String(item.event || "")).toLowerCase() === "credit" ? "+" : "-"}
-                                                        {formatCurrency(Number(item.amount || 0))}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                ))
+                                transactions.map((item: any) => {
+                                    const mainAmount = Number(item.metadata?.split?.mainAmount || item.metadata?.receipt?.breakdown?.main || 0);
+                                    const agentAmount = Number(item.metadata?.split?.agentAmount || item.metadata?.receipt?.breakdown?.agent || 0);
+                                    const techAmount = Number(item.metadata?.split?.technologyAmount || item.metadata?.receipt?.breakdown?.technology || 0);
+
+                                    return (
+                                        <tr key={item.id} className="border-b border-slate-100 last:border-b-0">
+                                            <td className="py-4 text-sm font-medium text-slate-800">
+                                                <Link href={`/partner/wallet/transaction/${item.id}`}>{item.reference || item.id}</Link>
+                                            </td>
+                                            <td className="py-4 text-sm text-slate-600 uppercase">{item.event === "payment.agent.credit" ? "credit" : "debit"}</td>
+                                            <td className="py-4 text-sm text-slate-600">
+                                                {new Date(String(item.createdAt || item.updatedAt)).toLocaleString("en-NG", {
+                                                    year: "numeric",
+                                                    month: "short",
+                                                    day: "numeric",
+                                                    hour: "2-digit",
+                                                    minute: "2-digit",
+                                                })}
+                                            </td>
+                                            <td className="py-4 text-sm">{statusBadge((String(item.status || "")).toUpperCase() as WalletTransactionStatus)}</td>
+                                            <td className="py-4 text-sm text-slate-600">{item.channel || "Wallet"}</td>
+                                            <td
+                                                className={`py-4 text-right text-sm font-semibold ${(String(item.event || "")).toLowerCase().includes("credit") ? "text-emerald-700" : "text-rose-700"
+                                                    }`}
+                                            >
+                                                <span className="inline-flex items-center gap-1.5">
+                                                    {(String(item.event || "")).toLowerCase().includes("credit") ? (
+                                                        <ArrowDownLeft className="h-4 w-4" />
+                                                    ) : (
+                                                        <ArrowUpRight className="h-4 w-4" />
+                                                    )}
+                                                    {(String(item.event || "")).toLowerCase().includes("credit") ? "+" : "-"}
+                                                    {formatCurrency(Number(item.amount || 0))}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
                             )}
                         </tbody>
                     </table>

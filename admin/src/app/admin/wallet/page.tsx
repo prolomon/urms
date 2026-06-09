@@ -324,9 +324,9 @@ function WalletPage() {
                             onChange={(event) => setTypeFilter(event.target.value as "all" | WalletTransactionType)}
                             className="w-full rounded-xl border border-slate-400 bg-transparent px-3 py-2.5 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 appearance-none text-slate-600"
                         >
-                            <option value="all" hidden>All types</option>
-                            <option value="nomba.payment.credit">Credit</option>
-                            <option value="nomba.payment.debit">Debit</option>
+                            <option value="">All types</option>
+                            <option value="payment.admin.credit">Credit</option>
+                            <option value="payment.admin.debit">Debit</option>
                         </select>
                     </div>
                 </div>
@@ -378,38 +378,51 @@ function WalletPage() {
                                     </td>
                                 </tr>
                             ) : (
-                                transactions.map((item) => (
-                                    <tr key={item.id} className="border-b border-slate-100 last:border-b-0">
-                                        <td className="py-4 text-sm font-medium text-slate-800 hover:text-emerald-700"><Link href={`/admin/wallet/transaction/${item.reference}`}>{item.reference.slice(0, 27) || item.id}</Link></td>
-                                        <td className="py-4 text-sm text-slate-600 capitalize">{item.event ? "CREDIT" : "DEBIT"}</td>
-                                        <td className="py-4 text-sm text-slate-600">
-                                            {new Date(item.createdAt || item.updatedAt).toLocaleString("en-NG", {
-                                                year: "numeric",
-                                                month: "short",
-                                                day: "numeric",
-                                                hour: "2-digit",
-                                                minute: "2-digit",
-                                            })}
-                                        </td>
-                                        <td className="py-4 text-sm">{statusBadge(item.status)}</td>
-                                        <td
-                                            className={`py-4 text-right text-sm font-semibold ${(item.event || "").toLowerCase() === "nomba.payment.credit" ? "text-emerald-700" : "text-rose-700"
-                                                }`}
-                                        >
-                                            <span className="inline-flex items-center gap-1.5">
-                                                {(item.event || "").toLowerCase() === "nomba.payment.credit" ? (
-                                                    <ArrowDownLeft className="h-4 w-4" />
-                                                ) : (
-                                                    <ArrowUpRight className="h-4 w-4" />
-                                                )}
-                                                {(item.event || "").toLowerCase() === "nomba.payment.credit" ? "+" : "-"}
-                                                {formatCurrency(Math.abs(Number(item.amount || 0)))}
-                                            </span>
-                                        </td>
-                                        <td className="py-4 px-2 text-sm text-slate-600 capitalize text-center">{item.channel}</td>
-                                        <td className="py-4 px-2 text-sm text-slate-600 capitalize text-center">{item.currency}</td>
-                                    </tr>
-                                ))
+                                transactions.map((item: any) => {
+                                    const mainAmount = Number(item.metadata?.split?.mainAmount || item.metadata?.receipt?.breakdown?.main || 0);
+                                    const agentAmount = Number(item.metadata?.split?.agentAmount || item.metadata?.receipt?.breakdown?.agent || 0);
+                                    const techAmount = Number(item.metadata?.split?.technologyAmount || item.metadata?.receipt?.breakdown?.technology || 0);
+
+                                    return (
+                                        <tr key={item.id} className="border-b border-slate-100 last:border-b-0">
+                                            <td className="py-4 text-sm font-medium text-slate-800">
+                                                <Link href={`/partner/wallet/transaction/${item.id}`}>{item.reference || item.id}</Link>
+                                                <div className="mt-2 flex gap-2 text-[9px] text-slate-400">
+                                                    <span className="rounded bg-slate-100 px-3">M: {formatCurrency(mainAmount)}</span>
+                                                    <span className="rounded bg-blue-50 px-3 text-blue-600">A: {formatCurrency(agentAmount)}</span>
+                                                    <span className="rounded bg-violet-50 px-3 text-violet-600">T: {formatCurrency(techAmount)}</span>
+                                                </div>
+                                            </td>
+                                            <td className="py-4 text-sm text-slate-600 capitalize">{item.event === "payment.admin.credit" ? "CREDIT" : "DEBIT"}</td>
+                                            <td className="py-4 text-sm text-slate-600">
+                                                {new Date(item.createdAt || item.updatedAt).toLocaleString("en-NG", {
+                                                    year: "numeric",
+                                                    month: "short",
+                                                    day: "numeric",
+                                                    hour: "2-digit",
+                                                    minute: "2-digit",
+                                                })}
+                                            </td>
+                                            <td className="py-4 text-sm">{statusBadge(item.status)}</td>
+                                            <td
+                                                className={`py-4 text-right text-sm font-semibold ${(item.event || "").toLowerCase() === "payment.admin.credit" ? "text-emerald-700" : "text-rose-700"
+                                                    }`}
+                                            >
+                                                <span className="inline-flex items-center gap-1.5">
+                                                    {(item.event || "").toLowerCase() === "payment.admin.credit" ? (
+                                                        <ArrowDownLeft className="h-4 w-4" />
+                                                    ) : (
+                                                        <ArrowUpRight className="h-4 w-4" />
+                                                    )}
+                                                    {(item.event || "").toLowerCase() === "payment.admin.credit" ? "+" : "-"}
+                                                    {formatCurrency(Math.abs(Number(item.amount || 0)))}
+                                                </span>
+                                            </td>
+                                            <td className="py-4 px-2 text-sm text-slate-600 capitalize text-center">{item.channel}</td>
+                                            <td className="py-4 px-2 text-sm text-slate-600 capitalize text-center">{item.currency}</td>
+                                        </tr>
+                                    );
+                                })
                             )}
                         </tbody>
                     </table>

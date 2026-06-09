@@ -225,7 +225,7 @@ const initiateTransferController = async (req, res) => {
 
     } else if (type === "MEMBER") {
 
-      const member = await prisma.user.findUnique({
+      const member = await prisma.member.findUnique({
         where: { uid: req.userId },
         select: { uid: true, secureToken: true },
       });

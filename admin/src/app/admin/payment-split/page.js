@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Save, Info, PieChart as PieChartIcon } from "lucide-react";
 import {
   PieChart,
@@ -11,7 +11,7 @@ import {
   Legend,
 } from "recharts";
 import { useAuth } from "@/context/AuthContext";
-import { getPayments } from "@/lib/services/payments";
+import { getPayments, getTransactions } from "@/lib/services/payments";
 import { getMembers } from "@/lib/services/member";
 
 export default function PaymentSplit() {
@@ -23,15 +23,44 @@ export default function PaymentSplit() {
     { key: "technology", name: "Technology Fund", value: 10, color: "#8b5cf6" },
   ];
 
+  const [transactions, setTransactions] = useState([]);
   const [splits, setSplits] = useState(defaultSplits);
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null);
   const [paymentChecks, setPaymentChecks] = useState([]);
   const [grossRevenue, setGrossRevenue] = useState(0);
   const [totalDebt, setTotalDebt] = useState(0);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [splitAmounts, setSplitAmounts] = useState({});
+  const [selectedDate, setSelectedDate] = useState(new Date());
+
+  const fetchTransactions = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await getTransactions(1, 100);
+
+      if (response?.data) {
+        setTransactions(response.data.filter((tx) => {
+          const txDate = new Date(tx?.date || tx?.createdAt || null)
+          if (!txDate || isNaN(txDate.getTime())) return false;
+          const isToday =
+            txDate.getDate() === selectedDate.getDate() &&
+            txDate.getMonth() === selectedDate.getMonth() &&
+            txDate.getFullYear() === selectedDate.getFullYear();
+          return isToday;
+        }));
+      }
+
+    } catch (e) {
+      console.log("Error fetching transactions:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedDate]);
+
+  useEffect(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
 
   // Currency formatter
   const currencyFormatter = new Intl.NumberFormat("en-NG", {
@@ -110,32 +139,6 @@ export default function PaymentSplit() {
     });
   };
 
-  const extractNetPaymentTotal = (paymentList = []) =>
-    paymentList.reduce((sum, payment) => {
-      const amount = Number(payment?.amount || 0);
-      const debt = Number(payment?.debt || 0);
-      const isSuccessful =
-        !payment?.status || String(payment.status).toUpperCase() === "SUCCESS";
-      if (!isSuccessful) return sum;
-      return sum + Math.max(amount - debt, 0);
-    }, 0);
-
-  const paymentMatchesDebtRules = (payment = {}) => {
-    const amount = Number(payment?.amount || 0);
-    const debt = Number(payment?.debt || 0);
-    const status = String(payment?.status || "").toUpperCase();
-
-    if (status !== "SUCCESS") {
-      return false;
-    }
-
-    if (debt === 0) {
-      return true;
-    }
-
-    return debt !== 0 && debt - amount !== amount;
-  };
-
   const resolvePaymentName = (payment, memberLookup) => {
     const userId = payment?.userId || payment?.uid || payment?.memberId || payment?.customerId;
     const member = memberLookup.get(String(userId || ""));
@@ -195,45 +198,66 @@ export default function PaymentSplit() {
           .map((member) => [String(member?.uid || member?.id), member]),
       );
 
-      const paymentResponse = await getPayments();
-      const allPayments = Array.isArray(paymentResponse?.data)
-        ? paymentResponse.data
-        : [];
-      
-        console.log(allPayments, memberLookup, paymentResponse);
+      // Using the transactions state directly as requested
+      const mappedPayments = transactions.map((payment) => {
+        const amount = Number(payment?.amount || 0);
+        const debt = Number(payment?.debt || 0);
+        // Use netAmount from metadata receipt
+        const net = Number(payment?.metadata?.receipt?.netAmount || Math.max(amount - debt, 0));
 
-      const filteredPayments = allPayments
-        .filter((payment) => {
-          const userId = payment?.userId || payment?.uid || payment?.memberId || payment?.customerId;
-          return memberLookup.has(String(userId || ""));
-        })
-        .filter(paymentMatchesDebtRules)
-        .map((payment) => {
-          const amount = Number(payment?.amount || 0);
-          const debt = Number(payment?.debt || 0);
-          const net = Math.max(amount - debt, 0);
-          return {
-            id: payment?.reference || `${payment?.userId || "payment"}-${payment?.date || "row"}`,
-            userId: payment?.userId || payment?.uid || payment?.memberId || "",
-            name: resolvePaymentName(payment, memberLookup),
-            reference: payment?.reference || "",
-            status: payment?.status || "",
-            amount,
-            debt,
-            net,
-            date: payment?.date || payment?.createdAt || null,
-          };
-        });
+        // Extracting split values directly from metadata.split or metadata.receipt.breakdown
+        const mainAmount = Number(payment?.metadata?.split?.mainAmount || payment?.metadata?.receipt?.breakdown?.main || 0);
+        const agentAmount = Number(payment?.metadata?.split?.agentAmount || payment?.metadata?.receipt?.breakdown?.agent || 0);
+        const technologyAmount = Number(payment?.metadata?.split?.technologyAmount || payment?.metadata?.receipt?.breakdown?.technology || 0);
 
-      const grossTotal = filteredPayments.reduce((sum, item) => sum + item.amount, 0);
-      const debtTotal = filteredPayments.reduce((sum, item) => sum + item.debt, 0);
-      const netTotal = filteredPayments.reduce((sum, item) => sum + item.net, 0);
+        return {
+          id: payment?.id || payment?.reference || `${payment?.userId}-${Date.now()}`,
+          userId: payment?.userId || "",
+          name: resolvePaymentName(payment, memberLookup),
+          reference: payment?.reference || "",
+          status: payment?.status || "",
+          amount,
+          debt,
+          net,
+          mainAmount,
+          agentAmount,
+          technologyAmount,
+          date: payment?.date || payment?.createdAt || null,
+        };
+      });
 
-      setPaymentChecks(filteredPayments);
+      const grossTotal = mappedPayments.reduce((sum, item) => sum + item.amount, 0);
+      const debtTotal = mappedPayments.reduce((sum, item) => sum + item.debt, 0);
+      const netTotal = mappedPayments.reduce((sum, item) => sum + item.net, 0);
+
+      // Aggregate specific split totals from metadata values
+      const totalMain = mappedPayments.reduce((sum, item) => sum + item.mainAmount, 0);
+      const totalAgent = mappedPayments.reduce((sum, item) => sum + item.agentAmount, 0);
+      const totalTech = mappedPayments.reduce((sum, item) => sum + item.technologyAmount, 0);
+      const actualSplitTotal = totalMain + totalAgent + totalTech;
+
+      setPaymentChecks(mappedPayments);
       setGrossRevenue(grossTotal);
       setTotalDebt(debtTotal);
+      setTotalRevenue(actualSplitTotal || netTotal);
 
-      calculateSplitAmounts(netTotal, normalized);
+      // Map actual split data to splitAmounts state to reflect real transaction breakdown
+      const amounts = {};
+      normalized.forEach((split) => {
+        const key = split.key;
+        let amount = (netTotal * Number(split.value || 0)) / 100; // Fallback to calculation
+        if (key === "main") amount = totalMain || amount;
+        else if (key === "agent") amount = totalAgent || amount;
+        else if (key === "technology") amount = totalTech || amount;
+
+        amounts[key] = {
+          name: split.name,
+          amount: amount,
+          percentage: split.value,
+          color: split.color,
+        };
+      });
+      setSplitAmounts(amounts);
 
       setStatus(null);
     } catch (e) {
@@ -248,7 +272,7 @@ export default function PaymentSplit() {
     if (!user) return;
     loadConfig();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, uid, transactions]);
 
   const handleSplitChange = (index, newValue) => {
     const val = parseInt(newValue, 10) || 0;
@@ -262,29 +286,6 @@ export default function PaymentSplit() {
   };
 
   const totalAllocation = splits.reduce((acc, curr) => acc + curr.value, 0);
-
-  // const handleSave = async () => {
-  //   if (totalAllocation !== 100) {
-  //     setStatus({ type: "error", msg: "Total allocation must be 100%" });
-  //     return;
-  //   }
-  //   setSaving(true);
-  //   setStatus(null);
-  //   try {
-  //     const payloadConfig = (splits || []).reduce((acc, curr) => {
-  //       const key = curr.key || displayToKey[curr.name] || curr.name;
-  //       acc[key] = curr.value;
-  //       return acc;
-  //     }, {});
-  //     console.log("Saving config:", payloadConfig);
-  //     await update({ paymentConfig: payloadConfig }, uid ?? user?.uid ?? "");
-  //     setStatus({ type: "success", msg: "Payment configuration saved" });
-  //   } catch (e) {
-  //     setStatus({ type: "error", msg: e.message || "Failed to save config" });
-  //   } finally {
-  //     setSaving(false);
-  //   }
-  // };
 
   return (
     <div className="space-y-4 p-4 md:p-6">
@@ -304,22 +305,20 @@ export default function PaymentSplit() {
 
           <div className="flex flex-wrap items-center gap-2">
             <span
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                totalAllocation === 100
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${totalAllocation === 100
                   ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
                   : "border border-rose-200 bg-rose-50 text-rose-700"
-              }`}
+                }`}
             >
               Total: {totalAllocation}%
             </span>
             <button
               onClick={loadConfig}
               disabled={loading}
-              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
-                loading
+              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${loading
                   ? "cursor-not-allowed bg-slate-200 text-slate-500"
                   : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
+                }`}
             >
               Reload
             </button>
@@ -344,11 +343,10 @@ export default function PaymentSplit() {
       {/* Status Message */}
       {status && (
         <div
-          className={`rounded-2xl border p-4 ${
-            status.type === "success"
+          className={`rounded-2xl border p-4 ${status.type === "success"
               ? "border-emerald-200 bg-emerald-50 text-emerald-700"
               : "border-rose-200 bg-rose-50 text-rose-700"
-          }`}
+            }`}
         >
           <p className="text-sm font-semibold">{status.msg}</p>
         </div>
@@ -450,22 +448,20 @@ export default function PaymentSplit() {
             </div>
 
             <div
-              className={`mt-4 rounded-xl border p-4 transition-all ${
-                totalAllocation === 100
+              className={`mt-4 rounded-xl border p-4 transition-all ${totalAllocation === 100
                   ? "border-emerald-200 bg-emerald-50"
                   : "border-rose-200 bg-rose-50"
-              }`}
+                }`}
             >
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-slate-800">
                   Total Allocation
                 </span>
                 <span
-                  className={`text-xl font-extrabold ${
-                    totalAllocation === 100
+                  className={`text-xl font-extrabold ${totalAllocation === 100
                       ? "text-emerald-700"
                       : "text-rose-700"
-                  }`}
+                    }`}
                 >
                   {totalAllocation}%
                 </span>
@@ -478,7 +474,7 @@ export default function PaymentSplit() {
               </p>
             )}
           </div>
-          
+
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-600">
               Member Payment Check
@@ -488,7 +484,7 @@ export default function PaymentSplit() {
                 paymentChecks.map((payment) => (
                   <div key={payment.id} className="rounded-lg bg-slate-50 p-3 text-sm">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="font-medium text-slate-800">{payment.name}</span>
+                      <span className="font-medium text-slate-800 uppercase">{payment.name}</span>
                       <span className="font-semibold text-slate-900">
                         {currencyFormatter.format(payment.net)}
                       </span>
@@ -501,6 +497,21 @@ export default function PaymentSplit() {
                       {payment.reference ? (
                         <span>Ref: {payment.reference}</span>
                       ) : null}
+                    </div>
+                    {/* Appended breakdown values per transaction */}
+                    <div className="mt-2 flex gap-3 border-t border-slate-200 pt-2 text-[10px]">
+                      <div className="flex flex-col rounded-lg bg-slate-200 p-3 test-center items-center justify-center basis-1 w-full">
+                        <span className="text-slate-600 text-sm font-bold">Main</span>
+                        <span className="font-semibold text-emerald-600 text-base">{currencyFormatter.format(payment.mainAmount)}</span>
+                      </div>
+                      <div className="flex flex-col rounded-lg bg-slate-200 p-3 test-center items-center justify-center basis-1 w-full">
+                        <span className="text-slate-600 text-sm font-bold">Agent</span>
+                        <span className="font-semibold text-blue-600 text-base">{currencyFormatter.format(payment.agentAmount)}</span>
+                      </div>
+                      <div className="flex flex-col rounded-lg bg-slate-200 p-3 test-center items-center justify-center basis-1 w-full">
+                        <span className="text-slate-600 text-sm font-bold">Tech</span>
+                        <span className="font-semibold text-violet-600 text-base">{currencyFormatter.format(payment.technologyAmount)}</span>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -534,7 +545,7 @@ export default function PaymentSplit() {
                 </Pie>
                 <Tooltip
                   formatter={(value, name, props) => [
-                    `${value}% (${currencyFormatter.format((totalRevenue * value) / 100)})`,
+                    `${value}% (${currencyFormatter.format(splitAmounts[props.payload.key]?.amount || (totalRevenue * value) / 100)})`,
                     name || props.payload.name,
                   ]}
                 />

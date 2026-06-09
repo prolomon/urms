@@ -311,4 +311,3 @@ enum PaymentType {
   COMPLETE
   PART_PAYMENT
 }
-

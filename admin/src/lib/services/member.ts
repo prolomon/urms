@@ -36,7 +36,6 @@ export type Member = {
   };
   status?: boolean;
   avatar?: string;
-  secureToken?: string;
   pricing?: string[];
   role?: "USER" | "ADMIN";
   createdAt?: string;

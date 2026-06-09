@@ -10,9 +10,11 @@ import { getMembersByCompanyId } from "@/lib/services/member";
 import { getAgents } from "@/lib/services/agent";
 import { getPricingByCenter } from "@/lib/services/pricing";
 import { usePartner } from "@/context/PartnerContext";
+import { getWallet } from "@/lib/services/wallet";
 
 function Home() {
   const { user } = usePartner();
+  const [wallet, setWallet] = useState();
   const userId = user?.uid;
   const [isLive, setIsLive] = useState(true);
   const [members, setMembers] = useState([]);
@@ -31,8 +33,12 @@ function Home() {
 
     const loadData = async () => {
       try {
+
+        const walletRes = await getWallet(userId, "COMPANY");
+        setWallet(walletRes);
+
         // fetch members (get a larger page so we can build distribution)
-        const memberData = await getMembersByCompanyId(1, 1000, user.uid);
+        const memberData = await getMembersByCompanyId(1, 100, user.uid);
         if (isCancelled) return;
         const membersList = memberData?.data || [];
         const totalEntities = memberData?.meta?.total ?? membersList.length;
@@ -95,13 +101,6 @@ function Home() {
           paymentRate,
           agents: totalAgents,
         });
-        console.log(
-          "Data loaded",
-          totalEntities,
-          monthly,
-          paymentRate,
-          totalAgents,
-        );
       } catch (error) {
         if (!isCancelled) {
           console.error("Failed to fetch data", error);

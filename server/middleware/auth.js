@@ -1,4 +1,4 @@
-import {prisma} from "../config/db.js";
+import { prisma } from "../config/db.js";
 import { TextEncoder } from "util";
 
 const joseImport = () => import("jose");
@@ -115,19 +115,17 @@ const authMiddleware = async (req, res, next) => {
         where: { uid: userUid },
         select: {
           id: true,
-  uid: true,
-  name: true,
-  phone: true,
-  email: true,
-  avatar: true,
-  status: true,
-  center: true,
-  role: true,
-  secureToken: true,
-  accountCode: true,
-  location: true,
-  createdAt: true,
-  updatedAt: true,
+          uid: true,
+          name: true,
+          phone: true,
+          email: true,
+          avatar: true,
+          status: true,
+          center: true,
+          role: true,
+          location: true,
+          createdAt: true,
+          updatedAt: true,
         },
       });
       userType = "company";
@@ -160,4 +158,4 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
-export {authMiddleware};
+export { authMiddleware };

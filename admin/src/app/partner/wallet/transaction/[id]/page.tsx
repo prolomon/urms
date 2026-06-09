@@ -236,7 +236,7 @@ function TransactionDetailPage() {
     }
 
     const transactionType = (transaction.event || "").toLowerCase();
-    const isCredit = transactionType === "credit";
+    const isCredit = transactionType === "payment.company.credit";
 
     return (
         <div className="mx-auto max-w-7xl p-4 md:p-6 space-y-4 md:space-y-5">

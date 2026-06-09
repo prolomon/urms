@@ -175,15 +175,15 @@ const createMember = async (req, res) => {
       const selectedPricingIds = Array.isArray(value.pricing) ? value.pricing : [];
       const availablePricing = selectedPricingIds.length
         ? await tx.pricing.findMany({
-            where: {
-              id: { in: selectedPricingIds },
-              status: true,
-            },
-            select: {
-              id: true,
-              price: true,
-            },
-          })
+          where: {
+            id: { in: selectedPricingIds },
+            status: true,
+          },
+          select: {
+            id: true,
+            price: true,
+          },
+        })
         : [];
 
       const pricingById = new Map(
@@ -218,9 +218,6 @@ const createMember = async (req, res) => {
 
         createdPayments.push(createdPayment);
       }
-
-      console.log("Created member:", createdMember);
-      console.log("Created initial payments:", createdPayments);
 
       return { member: createdMember, initialPayment: createdPayments };
     });
@@ -477,7 +474,6 @@ const login = async (req, res) => {
         category: true,
         pricing: true,
         company: true,
-        agent: true,
       },
     });
 
@@ -496,10 +492,10 @@ const login = async (req, res) => {
     }
 
     const ip = req.headers['cf-connecting-ip'] ||
-    req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-    req.headers['x-real-ip'] ||
-    req.connection.remoteAddress ||
-    req.socket.remoteAddress 
+      req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+      req.headers['x-real-ip'] ||
+      req.connection.remoteAddress ||
+      req.socket.remoteAddress
 
     // Return member data
     const { password: pwd, ...memberWithoutPassword } = member;
@@ -1080,7 +1076,7 @@ const getMembersByCompanyId = async (req, res) => {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.min(
       Math.max(parseInt(req.query.limit, 10) || 20, 1),
-      100,
+      100, // Ensure this cap is active
     );
     const skip = (page - 1) * limit;
     const where = { company: companyId };
@@ -1090,7 +1086,6 @@ const getMembersByCompanyId = async (req, res) => {
         where,
         skip,
         take: limit,
-        select: memberSafeSelect,
       }),
       prisma.member.count({ where }),
     ]);
