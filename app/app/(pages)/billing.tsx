@@ -240,9 +240,15 @@ export default function MakePayment() {
 
                   <View style={styles.amountGrid}>
                     <View style={styles.amountBadge}>
-                      <Text style={styles.amountLabel}>Amount</Text>
+                      <Text style={styles.amountLabel}>
+                        {Number(payment.debt) > 0 ? "Total Paid" : "Amount"}
+                      </Text>
                       <Text style={styles.amountValue}>
-                        {formatAmount(Number(payment.amount) || 0).replace("₦", "")}
+                        {formatAmount(
+                          Number(payment.debt) > 0
+                            ? (Number(payment.amount) || 0) - (Number(payment.debt) || 0)
+                            : (Number(payment.amount) || 0)
+                        ).replace("₦", "")}
                       </Text>
                     </View>
                     <View style={styles.debtBadge}>

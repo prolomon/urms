@@ -700,11 +700,37 @@ const makePayment = async (req, res) => {
     });
 
     const paymentResult = await prisma.$transaction(async (tx) => {
+      // Calculate debt: first clear any existing debt (from paymentRecord.debt), then handle current cycle
+      const existingDebt = Number(paymentRecord.debt || 0);
+      const currentAmount = Number(paymentRecord.amount || 0);
+
+      let remainingAfterDebt = totalAmount;
+      let updatedDebt = existingDebt;
+
+      // If there is existing debt, pay it off first
+      if (existingDebt > 0) {
+        if (remainingAfterDebt >= existingDebt) {
+          remainingAfterDebt -= existingDebt;
+          updatedDebt = 0;
+        } else {
+          updatedDebt = existingDebt - remainingAfterDebt;
+          remainingAfterDebt = 0;
+        }
+      }
+
+      // Remaining amount goes toward current cycle's expected amount
+      if (remainingAfterDebt > 0) {
+        const outstandingForCurrentCycle = Math.max(currentAmount - remainingAfterDebt, 0);
+        updatedDebt += outstandingForCurrentCycle;
+      }
+
+      const isFullyPaid = updatedDebt <= 0;
+
       const updatedPayment = await tx.payment.update({
         where: { id: paymentRecord.id },
         data: {
-          debt: paymentRecord.amount - totalAmount,
-          status: paymentRecord.amount === totalAmount ? paymentRecord.due === totalAmount ? "COMPLETED" : "PENDING" : "PENDING",
+          debt: updatedDebt,
+          status: isFullyPaid ? "COMPLETED" : "PENDING",
         },
       });
 

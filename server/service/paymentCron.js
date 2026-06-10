@@ -14,10 +14,13 @@ export const startPaymentCron = () => {
   // Run hourly at minute 0
   cron.schedule('0 * * * *', async () => {
     try {
+      // Find payments where createdAt + 30 days has passed (due for next cycle)
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
       const duePayments = await prisma.payment.findMany({
         where: {
-          due: {
-            lte: new Date(),
+          createdAt: {
+            lte: thirtyDaysAgo,
           },
         },
       });
