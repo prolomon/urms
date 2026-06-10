@@ -78,9 +78,6 @@ const updateCompanySchema = Joi.object({
   secureToken: Joi.string().trim().optional().messages({
     "string.base": "Secure token must be a string",
   }),
-  accountCode: Joi.string().trim().optional().messages({
-    "string.base": "Account code must be a string",
-  }),
   location: locationSchema.optional().messages({
     "alternatives.match": "Location must be a valid object or string",
   }),
