@@ -6,7 +6,7 @@ import {
   makePaymentSchema,
 } from "../validator/paymentValidator.js";
 import { customAlphabet } from "nanoid";
-import { initiateTransfer, createRecipient } from "../service/paystack.js";
+import { initiateTransfer as nombaTransfer } from "../service/wallet.js";
 import { generateTransactionReference } from "./paymentTransactionController.js";
 import argon2 from "argon2";
 
@@ -507,7 +507,7 @@ const makePayment = async (req, res) => {
       paymentRecord,
       main,
       mainWallet,
-      agentWallet,
+      agentWallet, 
       senderWallet,
       technologyWallet,
     ] = await Promise.all([
@@ -700,11 +700,37 @@ const makePayment = async (req, res) => {
     });
 
     const paymentResult = await prisma.$transaction(async (tx) => {
+      // Calculate debt: first clear any existing debt (from paymentRecord.debt), then handle current cycle
+      const existingDebt = Number(paymentRecord.debt || 0);
+      const currentAmount = Number(paymentRecord.amount || 0);
+
+      let remainingAfterDebt = totalAmount;
+      let updatedDebt = existingDebt;
+
+      // If there is existing debt, pay it off first
+      if (existingDebt > 0) {
+        if (remainingAfterDebt >= existingDebt) {
+          remainingAfterDebt -= existingDebt;
+          updatedDebt = 0;
+        } else {
+          updatedDebt = existingDebt - remainingAfterDebt;
+          remainingAfterDebt = 0;
+        }
+      }
+
+      // Remaining amount goes toward current cycle's expected amount
+      if (remainingAfterDebt > 0) {
+        const outstandingForCurrentCycle = Math.max(currentAmount - remainingAfterDebt, 0);
+        updatedDebt += outstandingForCurrentCycle;
+      }
+
+      const isFullyPaid = updatedDebt <= 0;
+
       const updatedPayment = await tx.payment.update({
         where: { id: paymentRecord.id },
         data: {
-          debt: paymentRecord.amount - totalAmount,
-          status: paymentRecord.amount === totalAmount ? paymentRecord.due === totalAmount ? "COMPLETED" : "PENDING" : "PENDING",
+          debt: updatedDebt,
+          status: isFullyPaid ? "COMPLETED" : "PENDING",
         },
       });
 
@@ -895,6 +921,48 @@ const makePayment = async (req, res) => {
 
       return { payment: updatedPayment, paymentTransaction };
     });
+
+    // Initiate Nomba transfer to agent's bank account if agent wallet exists
+    if (agentWallet && agentWallet.accountNo && agentWallet.bank?.code) {
+      try {
+        const agentTransfer = await nombaTransfer(
+          agentAmount,
+          agentWallet.accountNo,
+          agentWallet.accountName || 'Agent',
+          agentWallet.bank.code,
+          `${receiptReference}-AGENT-TRANSFER`,
+          `${senderDetails.accountName || ' - Payment Split'}`,
+          'Agent wallet payout'
+        );
+
+        if (!agentTransfer?.status) {
+          console.error('Agent Nomba transfer failed:', agentTransfer?.message);
+        }
+      } catch (transferError) {
+        console.error('Agent Nomba transfer error:', transferError?.message || transferError);
+      }
+    }
+
+    // Initiate Nomba transfer to admin's bank account if main wallet exists
+    if (mainWallet && mainWallet.accountNo && mainWallet.bank?.code) {
+      try {
+        const adminTransfer = await nombaTransfer(
+          mainAmount,
+          mainWallet.accountNo,
+          mainWallet.accountName || 'Admin',
+          mainWallet.bank.code,
+          `${receiptReference}-ADMIN-TRANSFER`,
+          `${senderDetails.accountName || ' - Payment Split'}`,
+          'Admin wallet payout'
+        );
+
+        if (!adminTransfer?.status) {
+          console.error('Admin Nomba transfer failed:', adminTransfer?.message);
+        }
+      } catch (transferError) {
+        console.error('Admin Nomba transfer error:', transferError?.message || transferError);
+      }
+    }
 
     return res.status(201).json({
       ok: true,

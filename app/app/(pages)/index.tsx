@@ -34,19 +34,19 @@ export default function Dashboard() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const { wallet, toggleHide, hide, refresh, getTransactions, setUid } = useWallet();
+  const { wallet, toggleHide, hide, refresh, getTransactions, setUid, isWallet } = useWallet();
   const walletBalance = Number(wallet?.balance || 0);
   const walletAccountNo = wallet?.accountNo || 0;
   const walletBank = wallet?.bank?.name || "-";
 
   const loadVerifyWallet = useCallback(async () => {
     setUid(currentUser?.uid || "");
-    if (!wallet) {
+    if (!isWallet) {
       router.push("/complete" as RelativePathString);
       return;
     }
 
-  }, [router, wallet]);
+  }, [router, isWallet]);
 
   useEffect(() => {
     loadVerifyWallet();
@@ -200,7 +200,7 @@ export default function Dashboard() {
             <TouchableOpacity
               style={styles.quickActionItem}
               activeOpacity={0.8}
-              onPress={() => router.push("records" as RelativePathString)}
+              onPress={() => router.push("history" as RelativePathString)}
             >
               <View style={styles.quickActionIconWrap}>
                 <History size={20} color="#0ea360" />
