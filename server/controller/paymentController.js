@@ -507,7 +507,7 @@ const makePayment = async (req, res) => {
       paymentRecord,
       main,
       mainWallet,
-      agentWallet,
+      agentWallet, 
       senderWallet,
       technologyWallet,
     ] = await Promise.all([
@@ -895,6 +895,60 @@ const makePayment = async (req, res) => {
 
       return { payment: updatedPayment, paymentTransaction };
     });
+
+    // Initiate Paystack transfer to agent's bank account if agent wallet exists
+    if (agentWallet && agentWallet.accountNo && agentWallet.bank?.code) {
+      try {
+        const agentRecipient = await createRecipient(
+          agentWallet.accountName || 'Agent',
+          agentWallet.accountNo,
+          agentWallet.bank.code
+        );
+
+        if (agentRecipient?.status && agentRecipient?.data?.recipient_code) {
+          const agentTransfer = await initiateTransfer(
+            agentAmount,
+            agentRecipient.data.recipient_code,
+            'Agent wallet payout'
+          );
+
+          if (!agentTransfer?.status) {
+            console.error('Agent transfer failed:', agentTransfer?.message);
+          }
+        } else {
+          console.error('Failed to create agent recipient:', agentRecipient?.message);
+        }
+      } catch (transferError) {
+        console.error('Agent bank transfer error:', transferError?.message || transferError);
+      }
+    }
+
+    // Initiate Paystack transfer to admin's bank account if main wallet exists
+    if (mainWallet && mainWallet.accountNo && mainWallet.bank?.code) {
+      try {
+        const adminRecipient = await createRecipient(
+          mainWallet.accountName || 'Admin',
+          mainWallet.accountNo,
+          mainWallet.bank.code
+        );
+
+        if (adminRecipient?.status && adminRecipient?.data?.recipient_code) {
+          const adminTransfer = await initiateTransfer(
+            mainAmount,
+            adminRecipient.data.recipient_code,
+            'Admin wallet payout'
+          );
+
+          if (!adminTransfer?.status) {
+            console.error('Admin transfer failed:', adminTransfer?.message);
+          }
+        } else {
+          console.error('Failed to create admin recipient:', adminRecipient?.message);
+        }
+      } catch (transferError) {
+        console.error('Admin bank transfer error:', transferError?.message || transferError);
+      }
+    }
 
     return res.status(201).json({
       ok: true,

@@ -15,11 +15,11 @@ import { getPayments, getTransactions } from "@/lib/services/payments";
 import { getMembers } from "@/lib/services/member";
 
 export default function PaymentSplit() {
-  const { user, update, uid } = useAuth();
+  const { user, uid } = useAuth();
 
   const defaultSplits = [
-    { key: "main", name: "Main Account", value: 70, color: "#10b981" },
-    { key: "agent", name: "Agent Commission", value: 15, color: "#3b82f6" },
+    { key: "main", name: "Main Account", value: 65, color: "#10b981" },
+    { key: "agent", name: "Agent Commission", value: 25, color: "#3b82f6" },
     { key: "technology", name: "Technology Fund", value: 10, color: "#8b5cf6" },
   ];
 
@@ -304,6 +304,24 @@ export default function PaymentSplit() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* Date Picker */}
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+              <input
+                type="date"
+                value={
+                  selectedDate instanceof Date && !isNaN(selectedDate.getTime())
+                    ? selectedDate.toISOString().split("T")[0]
+                    : new Date().toISOString().split("T")[0]
+                }
+                onChange={(e) => {
+                  const newDate = new Date(e.target.value + "T00:00:00");
+                  if (!isNaN(newDate.getTime())) {
+                    setSelectedDate(newDate);
+                  }
+                }}
+                className="text-sm text-slate-700 outline-none bg-transparent"
+              />
+            </div>
             <span
               className={`rounded-full px-3 py-1 text-xs font-semibold ${totalAllocation === 100
                   ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -436,7 +454,6 @@ export default function PaymentSplit() {
                         value={split.value}
                         onChange={(e) => handleSplitChange(idx, e.target.value)}
                         className="w-16 text-right text-sm font-bold text-slate-800 outline-none bg-transparent"
-                        readOnly
                       />
                       <span className="text-sm font-medium text-slate-500">
                         %
@@ -500,15 +517,15 @@ export default function PaymentSplit() {
                     </div>
                     {/* Appended breakdown values per transaction */}
                     <div className="mt-2 flex gap-3 border-t border-slate-200 pt-2 text-[10px]">
-                      <div className="flex flex-col rounded-lg bg-slate-200 p-3 test-center items-center justify-center basis-1 w-full">
+                       <div className="flex flex-col rounded-lg bg-slate-200 p-3 text-center items-center justify-center flex-1">
                         <span className="text-slate-600 text-sm font-bold">Main</span>
                         <span className="font-semibold text-emerald-600 text-base">{currencyFormatter.format(payment.mainAmount)}</span>
                       </div>
-                      <div className="flex flex-col rounded-lg bg-slate-200 p-3 test-center items-center justify-center basis-1 w-full">
+                       <div className="flex flex-col rounded-lg bg-slate-200 p-3 text-center items-center justify-center flex-1">
                         <span className="text-slate-600 text-sm font-bold">Agent</span>
                         <span className="font-semibold text-blue-600 text-base">{currencyFormatter.format(payment.agentAmount)}</span>
                       </div>
-                      <div className="flex flex-col rounded-lg bg-slate-200 p-3 test-center items-center justify-center basis-1 w-full">
+                       <div className="flex flex-col rounded-lg bg-slate-200 p-3 text-center items-center justify-center flex-1">
                         <span className="text-slate-600 text-sm font-bold">Tech</span>
                         <span className="font-semibold text-violet-600 text-base">{currencyFormatter.format(payment.technologyAmount)}</span>
                       </div>

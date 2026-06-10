@@ -20,7 +20,7 @@ export const useWallet = () => {
 export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
     const [wallet, setWallet] = useState<Wallet | null>(null);
     const [walletState, setWalletState] = useState<boolean>(false);
-    const [isWallet, setIsWallet] = useState<boolean>(false);
+    const [isWallet, setIsWallet] = useState<boolean>(true);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
     const [message, setMessage] = useState<string | null>(null);
