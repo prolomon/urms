@@ -507,7 +507,7 @@ const makePayment = async (req, res) => {
       paymentRecord,
       main,
       mainWallet,
-      agentWallet, 
+      agentWallet,
       senderWallet,
       technologyWallet,
     ] = await Promise.all([
@@ -945,12 +945,19 @@ const makePayment = async (req, res) => {
 
     // Initiate Nomba transfer to admin's bank account if main wallet exists
     if (mainWallet && mainWallet.accountNo && mainWallet.bank?.code) {
+
+      const payout = await prisma.payout.findFirst({
+        where: {
+          userId: center,
+        },
+      })
+
       try {
         const adminTransfer = await nombaTransfer(
           mainAmount,
-          mainWallet.accountNo,
-          mainWallet.accountName || 'Admin',
-          mainWallet.bank.code,
+          payout.accountNumber || mainWallet.accountNo,
+          payout.accountName || 'Admin',
+          payout.bankCode || mainWallet.bank?.code,
           `${receiptReference}-ADMIN-TRANSFER`,
           `${senderDetails.accountName || ' - Payment Split'}`,
           'Admin wallet payout'
@@ -977,7 +984,7 @@ const makePayment = async (req, res) => {
           netAmount: totalAmount,
         },
         split: {
-          mainWallet: mainAmount ,
+          mainWallet: mainAmount,
           agentWallet: agentAmount,
           technologyWallet: technologyAmount + fee,
           breakdown: {
@@ -999,6 +1006,7 @@ const makePayment = async (req, res) => {
     });
   }
 };
+
 export {
   createPayment,
   getPaymentsByUserId,

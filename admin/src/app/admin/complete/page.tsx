@@ -17,17 +17,25 @@ export default function CompleteProfileScreen() {
   const [securityCode, setSecurityCode] = useState("");
   const [confirmSecurityCode, setConfirmSecurityCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
   const [idType, setIdType] = useState<"BVN" | "NIN">("BVN");
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
-
     setUid(user?.uid || null);
+  }, [setUid, user?.uid]);
+
+  useEffect(() => {
+    // Wait until wallet state is determined
+    if (wallet === null) return;
 
     if (wallet) {
       router.replace("/admin/wallet");
+      return;
     }
-  }, [router, wallet, setUid, user?.uid])
+
+    setPageLoading(false);
+  }, [router, wallet])
 
   const success = (message: string) => {
     setToast({ type: "success", message });
@@ -121,6 +129,17 @@ export default function CompleteProfileScreen() {
       setLoading(false);
     }
   };
+
+  if (pageLoading) {
+    return (
+      <div className="min-h-screen bg-linear-to-br from-emerald-50 via-white to-cyan-50 px-4 py-6 text-slate-800 md:px-6 md:py-10 flex items-center justify-center">
+        <div className="flex items-center gap-2 text-slate-500">
+          <Wallet className="h-5 w-5 animate-pulse" />
+          <span>Checking wallet status...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-linear-to-br from-emerald-50 via-white to-cyan-50 px-4 py-6 text-slate-800 md:px-6 md:py-10">

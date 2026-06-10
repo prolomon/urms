@@ -29,6 +29,7 @@ function WalletPage() {
     const [statusFilter, setStatusFilter] = useState<string>("");
     const [typeFilter, setTypeFilter] = useState<string>("");
     const [copyMessage, setCopyMessage] = useState("");
+    const [pageLoading, setPageLoading] = useState(true);
     const { user } = useAuth();
     const { wallet, isWallet, loading, error, message, refresh, setUid, getTransactions } = useWallet();
     const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -60,13 +61,20 @@ function WalletPage() {
     }, [fetChTransactions]);
 
     useEffect(() => {
-
         setUid(user?.uid || null);
+    }, [setUid, user?.uid]);
+
+    useEffect(() => {
+        // Wait until wallet state is determined
+        if (wallet === null) return;
 
         if (!wallet) {
             router.replace("/admin/complete");
+            return;
         }
-    }, [router, wallet, setUid, user?.uid]);
+
+        setPageLoading(false);
+    }, [router, wallet]);
 
     //this id for the bank details 
     const bankDetails = {
@@ -155,6 +163,19 @@ function WalletPage() {
         );
     };
 
+    if (pageLoading) {
+        return (
+            <div className="mx-auto max-w-7xl p-4 md:p-6">
+                <div className="flex items-center justify-center min-h-100">
+                    <div className="flex items-center gap-2 text-slate-500">
+                        <Wallet className="h-5 w-5 animate-pulse" />
+                        <span>Loading wallet...</span>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="mx-auto max-w-7xl p-4 md:p-6 space-y-4 md:space-y-5">
             <div className="rounded-2xl bg-linear-to-r from-emerald-50 via-white to-cyan-50 ring-1 ring-emerald-100 p-5 md:p-6">
@@ -198,12 +219,19 @@ function WalletPage() {
                                 >
                                     Copy Details
                                 </button>
-                                <button
+                                {/* <button
                                     type="button"
                                     onClick={() => router.push("/admin/wallet/transfer")}
                                     className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors disabled:cursor-not-allowed disabled:bg-emerald-300"
                                 >
                                     Transfer
+                                </button> */}
+                                <button
+                                    type="button"
+                                    onClick={() => router.push("/admin/wallet/payout")}
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors disabled:cursor-not-allowed disabled:bg-emerald-300"
+                                >
+                                    Payout
                                 </button>
                             </>
                         )}
@@ -388,9 +416,9 @@ function WalletPage() {
                                             <td className="py-4 text-sm font-medium text-slate-800">
                                                 <Link href={`/partner/wallet/transaction/${item.id}`}>{item.reference || item.id}</Link>
                                                 <div className="mt-2 flex gap-2 text-[9px] text-slate-400">
-                                                    <span className="rounded bg-slate-100 px-3">M: {formatCurrency(mainAmount)}</span>
+                                                    <span className="rounded bg-emerald-100 px-3 text-emerald-600">M: {formatCurrency(mainAmount)}</span>
                                                     <span className="rounded bg-blue-50 px-3 text-blue-600">A: {formatCurrency(agentAmount)}</span>
-                                                    <span className="rounded bg-violet-50 px-3 text-violet-600">T: {formatCurrency(techAmount)}</span>
+                                                    <span className="rounded bg-purple-50 px-3 text-purple-600">T: {formatCurrency(techAmount)}</span>
                                                 </div>
                                             </td>
                                             <td className="py-4 text-sm text-slate-600 capitalize">{item.event === "payment.admin.credit" ? "CREDIT" : "DEBIT"}</td>
