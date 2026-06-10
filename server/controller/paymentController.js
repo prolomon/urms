@@ -6,7 +6,7 @@ import {
   makePaymentSchema,
 } from "../validator/paymentValidator.js";
 import { customAlphabet } from "nanoid";
-import { initiateTransfer, createRecipient } from "../service/paystack.js";
+import { initiateTransfer as nombaTransfer } from "../service/wallet.js";
 import { generateTransactionReference } from "./paymentTransactionController.js";
 import argon2 from "argon2";
 
@@ -922,57 +922,45 @@ const makePayment = async (req, res) => {
       return { payment: updatedPayment, paymentTransaction };
     });
 
-    // Initiate Paystack transfer to agent's bank account if agent wallet exists
+    // Initiate Nomba transfer to agent's bank account if agent wallet exists
     if (agentWallet && agentWallet.accountNo && agentWallet.bank?.code) {
       try {
-        const agentRecipient = await createRecipient(
-          agentWallet.accountName || 'Agent',
+        const agentTransfer = await nombaTransfer(
+          agentAmount,
           agentWallet.accountNo,
-          agentWallet.bank.code
+          agentWallet.accountName || 'Agent',
+          agentWallet.bank.code,
+          `${receiptReference}-AGENT-TRANSFER`,
+          `${senderDetails.accountName || ' - Payment Split'}`,
+          'Agent wallet payout'
         );
 
-        if (agentRecipient?.status && agentRecipient?.data?.recipient_code) {
-          const agentTransfer = await initiateTransfer(
-            agentAmount,
-            agentRecipient.data.recipient_code,
-            'Agent wallet payout'
-          );
-
-          if (!agentTransfer?.status) {
-            console.error('Agent transfer failed:', agentTransfer?.message);
-          }
-        } else {
-          console.error('Failed to create agent recipient:', agentRecipient?.message);
+        if (!agentTransfer?.status) {
+          console.error('Agent Nomba transfer failed:', agentTransfer?.message);
         }
       } catch (transferError) {
-        console.error('Agent bank transfer error:', transferError?.message || transferError);
+        console.error('Agent Nomba transfer error:', transferError?.message || transferError);
       }
     }
 
-    // Initiate Paystack transfer to admin's bank account if main wallet exists
+    // Initiate Nomba transfer to admin's bank account if main wallet exists
     if (mainWallet && mainWallet.accountNo && mainWallet.bank?.code) {
       try {
-        const adminRecipient = await createRecipient(
-          mainWallet.accountName || 'Admin',
+        const adminTransfer = await nombaTransfer(
+          mainAmount,
           mainWallet.accountNo,
-          mainWallet.bank.code
+          mainWallet.accountName || 'Admin',
+          mainWallet.bank.code,
+          `${receiptReference}-ADMIN-TRANSFER`,
+          `${senderDetails.accountName || ' - Payment Split'}`,
+          'Admin wallet payout'
         );
 
-        if (adminRecipient?.status && adminRecipient?.data?.recipient_code) {
-          const adminTransfer = await initiateTransfer(
-            mainAmount,
-            adminRecipient.data.recipient_code,
-            'Admin wallet payout'
-          );
-
-          if (!adminTransfer?.status) {
-            console.error('Admin transfer failed:', adminTransfer?.message);
-          }
-        } else {
-          console.error('Failed to create admin recipient:', adminRecipient?.message);
+        if (!adminTransfer?.status) {
+          console.error('Admin Nomba transfer failed:', adminTransfer?.message);
         }
       } catch (transferError) {
-        console.error('Admin bank transfer error:', transferError?.message || transferError);
+        console.error('Admin Nomba transfer error:', transferError?.message || transferError);
       }
     }
 
