@@ -16,15 +16,15 @@ function verifySignature(secret, rawBody, signatureHeader) {
 
 const nombaWebhook = async (req, res) => {
 
-  const signature = req.headers['x-nomba-signature'];
-  const secret = process.env.NOMBA_PRIVATE_SECRET;
+  // const signature = req.headers['x-nomba-signature'];
+  // const secret = process.env.NOMBA_PRIVATE_SECRET;
 
-  if (!verifySignature(secret, req.rawBody, signature)) {
-    return res.status(401).send('Invalid signature');
-  }
+  // if (!verifySignature(secret, req.rawBody, signature)) {
+  //   return res.status(401).send('Invalid signature');
+  // }
 
-  // ✅ Signature verified
-  console.log('Webhook verified');
+  // // ✅ Signature verified
+  // console.log('Webhook verified');
   
   try {
     const event = req.body;

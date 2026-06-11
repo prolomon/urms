@@ -98,8 +98,6 @@ export default function MakePayment() {
     }
   }, [currentUser?.uid, token, failed]);
 
-  console.log("Fetched payments:", allPayments);
-
   useEffect(() => {
     fetchPayments();
   }, [fetchPayments]);
@@ -370,6 +368,18 @@ export default function MakePayment() {
 
               <View style={styles.feeNote}>
                 <Text style={styles.feeNoteText}>Transaction fee is 2.5% of the payment amount.</Text>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Transaction Fee</Text>
+                <TextInput
+                  style={styles.amountInputLarge}
+                  placeholder="0"
+                  placeholderTextColor="#94a3b8"
+                  keyboardType="numeric"
+                  value={paymentAmount ? formatAmount(Math.ceil(Number(paymentAmount) * 0.025)).replace("₦", "") : ""}
+                  editable={false}
+                />
               </View>
 
               <TouchableOpacity

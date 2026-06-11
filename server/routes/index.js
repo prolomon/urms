@@ -15,6 +15,7 @@ import { walletRouter } from './walletRoutes.js';
 import { webhookRouter } from './webhookRoutes.js';
 import { recruitmentRouter } from './recruitmentRoutes.js';
 import { transactionRouter } from './transactionRoutes.js';
+import { payoutRouter } from './payoutRoutes.js';
 import paymentTransactionRoutes from './paymentTransactionRoutes.js';
 
 // Apply database health check to all API routes
@@ -35,6 +36,7 @@ router.use('/pricing', pricingRouter);
 router.use('/wallet', walletRouter);
 router.use('/transaction', transactionRouter);
 router.use('/webhook', webhookRouter);
+router.use('/payout', payoutRouter);
 router.use('/recruitment', recruitmentRouter);
 
 export  {router as apiRouter};

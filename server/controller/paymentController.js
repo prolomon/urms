@@ -507,7 +507,7 @@ const makePayment = async (req, res) => {
       paymentRecord,
       main,
       mainWallet,
-      agentWallet, 
+      agentWallet,
       senderWallet,
       technologyWallet,
     ] = await Promise.all([
@@ -701,26 +701,28 @@ const makePayment = async (req, res) => {
 
     const paymentResult = await prisma.$transaction(async (tx) => {
       // Calculate debt: first clear any existing debt (from paymentRecord.debt), then handle current cycle
+      // Use grossAmount (what the user actually paid) for debt calculation, not totalAmount (net after fee).
+      // The fee is a platform processing cost and should not reduce the amount credited toward the user's debt.
       const existingDebt = Number(paymentRecord.debt || 0);
       const currentAmount = Number(paymentRecord.amount || 0);
 
-      let remainingAfterDebt = totalAmount;
+      let remainingPayment = grossAmount;
       let updatedDebt = existingDebt;
 
       // If there is existing debt, pay it off first
       if (existingDebt > 0) {
-        if (remainingAfterDebt >= existingDebt) {
-          remainingAfterDebt -= existingDebt;
+        if (remainingPayment >= existingDebt) {
+          remainingPayment -= existingDebt;
           updatedDebt = 0;
         } else {
-          updatedDebt = existingDebt - remainingAfterDebt;
-          remainingAfterDebt = 0;
+          updatedDebt = existingDebt - remainingPayment;
+          remainingPayment = 0;
         }
       }
 
       // Remaining amount goes toward current cycle's expected amount
-      if (remainingAfterDebt > 0) {
-        const outstandingForCurrentCycle = Math.max(currentAmount - remainingAfterDebt, 0);
+      if (remainingPayment > 0) {
+        const outstandingForCurrentCycle = Math.max(currentAmount - remainingPayment, 0);
         updatedDebt += outstandingForCurrentCycle;
       }
 
@@ -945,12 +947,19 @@ const makePayment = async (req, res) => {
 
     // Initiate Nomba transfer to admin's bank account if main wallet exists
     if (mainWallet && mainWallet.accountNo && mainWallet.bank?.code) {
+
+      const payout = await prisma.payout.findFirst({
+        where: {
+          userId: center,
+        },
+      })
+
       try {
         const adminTransfer = await nombaTransfer(
           mainAmount,
-          mainWallet.accountNo,
-          mainWallet.accountName || 'Admin',
-          mainWallet.bank.code,
+          payout.accountNumber || mainWallet.accountNo,
+          payout.accountName || 'Admin',
+          payout.bankCode || mainWallet.bank?.code,
           `${receiptReference}-ADMIN-TRANSFER`,
           `${senderDetails.accountName || ' - Payment Split'}`,
           'Admin wallet payout'
@@ -977,7 +986,7 @@ const makePayment = async (req, res) => {
           netAmount: totalAmount,
         },
         split: {
-          mainWallet: mainAmount ,
+          mainWallet: mainAmount,
           agentWallet: agentAmount,
           technologyWallet: technologyAmount + fee,
           breakdown: {
@@ -999,6 +1008,7 @@ const makePayment = async (req, res) => {
     });
   }
 };
+
 export {
   createPayment,
   getPaymentsByUserId,

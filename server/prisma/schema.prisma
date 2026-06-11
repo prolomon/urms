@@ -256,6 +256,20 @@ model Recruitment {
   @@index([email, phone, state, lga, accountNumber])
 }
 
+model Payout {
+  id            String   @id @default(cuid())
+  userId        String
+  bankName      String
+  accountNumber String
+  bankCode      String
+  accountName   String
+  status        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId, status])
+}
+
 enum BusinessType {
   BUSINESS
   INDIVIDUAL
