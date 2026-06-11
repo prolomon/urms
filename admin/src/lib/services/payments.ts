@@ -42,16 +42,15 @@ export type PaymentTransaction = {
 }
 
 
- export async function getPayments(): Promise<{ok: boolean; payments?: Payment[]; message?: string}> { 
-
-    const response = await fetch(`${API_URL}/payment/`, {
-        headers: {...buildHeaders()},
-    });
-    const data = await response.json();
-    if (!response.ok) {
-        throw new Error(data.message || "Failed to fetch payments");
-    }
-    return data;
+export async function getPayments(): Promise<{ ok: boolean; data?: Payment[]; message?: string }> {
+  const response = await fetch(`${API_URL}/payment/`, {
+    headers: { ...buildHeaders() },
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to fetch payments");
+  }
+  return data;
 }
 
 export async function getRecords(id: string, fromDate?: string, toDate?: string, query?: string): Promise<{ok: boolean;transactions?: PaymentTransaction[]; message?: string}> { 

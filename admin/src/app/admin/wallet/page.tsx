@@ -414,7 +414,7 @@ function WalletPage() {
                                     return (
                                         <tr key={item.id} className="border-b border-slate-100 last:border-b-0">
                                             <td className="py-4 text-sm font-medium text-slate-800">
-                                                <Link href={`/partner/wallet/transaction/${item.id}`}>{item.reference || item.id}</Link>
+                                                <Link href={`/admin/wallet/transaction/${item.reference}`}>{item.reference || item.id}</Link>
                                                 <div className="mt-2 flex gap-2 text-[9px] text-slate-400">
                                                     <span className="rounded bg-emerald-100 px-3 text-emerald-600">M: {formatCurrency(mainAmount)}</span>
                                                     <span className="rounded bg-blue-50 px-3 text-blue-600">A: {formatCurrency(agentAmount)}</span>
