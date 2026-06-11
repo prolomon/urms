@@ -431,7 +431,6 @@ export default function AssurancePage() {
             <table className="min-w-max w-full text-left">
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-700 md:px-6 md:text-sm">Reference</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-700 md:px-6 md:text-sm">Business</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-700 md:px-6 md:text-sm">Type</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-700 md:px-6 md:text-sm">Frequency</th>
@@ -442,9 +441,6 @@ export default function AssurancePage() {
               <tbody className="divide-y divide-slate-100">
                 {normalizedPayments.slice(0, 10).map((payment) => (
                   <tr key={payment.id || payment.reference} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-slate-700 md:px-6 md:text-sm">
-                      {payment.reference || payment.id || "—"}
-                    </td>
                     <td className="px-4 py-3 text-xs text-slate-700 md:px-6 md:text-sm">
                       {payment.businessName || payment.business_name || "—"}
                     </td>
