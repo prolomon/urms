@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import LineChartCard from "../../../components/LineChartCard";
-import { getAllPayments } from "@/lib/api";
+import { getPayments } from "@/lib/services/payments";
 import {
   FileText,
   FileSpreadsheet,
@@ -26,14 +26,15 @@ const paymentTrends = [
 export default function AssurancePage() {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
 
   useEffect(() => {
     let mounted = true;
     const load = async () => {
       setLoading(true);
       try {
-        const res = await getAllPayments();
-        const list = res?.data || res || [];
+        const res = await getPayments();
+        const list = res?.data || res?.payments || [];
         if (!mounted) return;
         setPayments(Array.isArray(list) ? list : []);
       } catch (e) {
@@ -75,16 +76,31 @@ export default function AssurancePage() {
     }).format(amount || 0);
   };
 
+  const filteredPayments = useMemo(() => {
+    if (!selectedDate) return payments;
+    return (payments || []).filter((payment) => {
+      const paymentDate = new Date(payment?.updatedAt || payment?.date || payment?.createdAt);
+      return (
+        paymentDate.getDate() === selectedDate.getDate() &&
+        paymentDate.getMonth() === selectedDate.getMonth() &&
+        paymentDate.getFullYear() === selectedDate.getFullYear()
+      );
+    });
+  }, [payments, selectedDate]);
+
   const normalizedPayments = useMemo(() => {
-    return (payments || []).map((payment) => {
+    return (filteredPayments || []).map((payment) => {
       const status = String(payment?.status || "UNKNOWN").toUpperCase();
       return {
         ...payment,
+        businessName: payment.member?.businessName || payment.member?.fullname || payment.businessName || "—",
+        businessType: payment.member?.type || payment.businessType || "—",
+        category: payment.member?.category || payment.category || "—",
         _amount: parseAmount(payment?.amount),
         _status: status,
       };
     });
-  }, [payments]);
+  }, [filteredPayments]);
 
   const metrics = useMemo(() => {
     const totalVolume = normalizedPayments.reduce((sum, payment) => sum + payment._amount, 0);
@@ -97,7 +113,22 @@ export default function AssurancePage() {
     const completedAmount = completed.reduce((sum, payment) => sum + payment._amount, 0);
     const pendingAmount = pending.reduce((sum, payment) => sum + payment._amount, 0);
     const failedAmount = failed.reduce((sum, payment) => sum + payment._amount, 0);
+
+    const compliant = completed.filter((p) => {
+      if (!p.due) return true;
+      const updated = new Date(p.updatedAt || p.date || p.createdAt);
+      const due = new Date(p.due);
+      return updated <= due;
+    });
+
     const collectionRate = totalVolume > 0 ? (completedAmount / totalVolume) * 100 : 0;
+    const complianceRate = normalizedPayments.length > 0 ? (compliant.length / normalizedPayments.length) * 100 : 0;
+
+    const overdueCount = normalizedPayments.filter((p) => {
+      if (p._status === "COMPLETED" || p._status === "SUCCESS") return false;
+      if (!p.due) return false;
+      return new Date() > new Date(p.due);
+    }).length;
 
     return {
       totalVolume,
@@ -109,12 +140,31 @@ export default function AssurancePage() {
       failedCount: failed.length,
       totalCount: normalizedPayments.length,
       collectionRate,
+      complianceRate,
+      overdueCount,
     };
   }, [normalizedPayments]);
 
+  const chartData = useMemo(() => {
+    const days = {};
+    (payments || []).forEach((payment) => {
+      const date = new Date(payment?.updatedAt || payment?.date || payment?.createdAt);
+      const dayKey = date.toISOString().split("T")[0];
+      days[dayKey] = (days[dayKey] || 0) + parseAmount(payment?.amount);
+    });
+    return Object.entries(days)
+      .map(([dateStr, value]) => ({
+        name: new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        date: dateStr,
+        value,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-7);
+  }, [payments]);
+
   const recentActions = useMemo(() => {
     return [...normalizedPayments]
-      .sort((a, b) => new Date(b?.date || b?.createdAt || 0).getTime() - new Date(a?.date || a?.createdAt || 0).getTime())
+      .sort((a, b) => new Date(b?.updatedAt || b?.date || b?.createdAt || 0).getTime() - new Date(a?.updatedAt || a?.date || a?.createdAt || 0).getTime())
       .slice(0, 3)
       .map((payment) => {
         const status = payment._status;
@@ -242,6 +292,23 @@ export default function AssurancePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+              <input
+                type="date"
+                value={
+                  selectedDate instanceof Date && !isNaN(selectedDate.getTime())
+                    ? selectedDate.toISOString().split("T")[0]
+                    : new Date().toISOString().split("T")[0]
+                }
+                onChange={(e) => {
+                  const newDate = new Date(e.target.value + "T00:00:00");
+                  if (!isNaN(newDate.getTime())) {
+                    setSelectedDate(newDate);
+                  }
+                }}
+                className="text-sm text-slate-700 outline-none bg-transparent"
+              />
+            </div>
             <button
               onClick={downloadCSV}
               disabled={loading || payments.length === 0}
@@ -334,7 +401,7 @@ export default function AssurancePage() {
           </div>
 
           <div className="rounded-2xl bg-white p-2 ring-1 ring-slate-100 shadow-sm">
-            <LineChartCard data={paymentTrends} title="Payment Trends" />
+            <LineChartCard data={chartData} title="Payment Trends (Recent)" />
           </div>
         </div>
 
@@ -349,7 +416,7 @@ export default function AssurancePage() {
               <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-semibold text-slate-700">On-time / Completed</span>
-                  <span className="font-bold text-emerald-700">{metrics.collectionRate.toFixed(1)}%</span>
+                  <span className="font-bold text-emerald-700">{metrics.complianceRate.toFixed(1)}%</span>
                 </div>
               </div>
 
@@ -366,7 +433,7 @@ export default function AssurancePage() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-semibold text-slate-700">Failed / Overdue Risk</span>
                   <span className="font-bold text-rose-700">
-                    {metrics.totalCount > 0 ? ((metrics.failedCount / metrics.totalCount) * 100).toFixed(1) : "0.0"}%
+                    {metrics.totalCount > 0 ? (((metrics.failedCount + metrics.overdueCount) / metrics.totalCount) * 100).toFixed(1) : "0.0"}%
                   </span>
                 </div>
               </div>
@@ -433,6 +500,7 @@ export default function AssurancePage() {
                 <tr>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-700 md:px-6 md:text-sm">Business</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-700 md:px-6 md:text-sm">Type</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-700 md:px-6 md:text-sm">Category</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-700 md:px-6 md:text-sm">Frequency</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-700 md:px-6 md:text-sm">Amount</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-700 md:px-6 md:text-sm">Status</th>
@@ -446,6 +514,9 @@ export default function AssurancePage() {
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-700 md:px-6 md:text-sm">
                       {payment.businessType || payment.business_type || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-700 md:px-6 md:text-sm">
+                      {payment.category || "—"}
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-700 md:px-6 md:text-sm">
                       {payment.frequency || payment.billingFrequency || payment.billing_frequency || payment.method || "—"}
