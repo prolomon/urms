@@ -287,7 +287,15 @@ const getAllPayments = async (req, res) => {
         orderBy: { createdAt: "desc" },
         include: {
           member: {
-            select: { id: true, fullname: true, email: true, uid: true },
+            select: {
+              id: true,
+              fullname: true,
+              email: true,
+              uid: true,
+              businessName: true,
+              category: true,
+              type: true,
+            },
           },
         },
       }),
